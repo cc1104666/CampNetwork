@@ -26,9 +26,7 @@ if os.path.exists(proxy_file):
 async def add_wallets_db():
     logger.info(f'Start import wallets')
     for i in range(len(private)):
-        random_user_agent = UserAgent(
-            os=['windows', 'macos', 'linux'], browsers='chrome')
-        user_agent = random_user_agent.random
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
         private_key = private[i]
         proxy = proxys[i]
         proxy = parse_proxy(proxy)
