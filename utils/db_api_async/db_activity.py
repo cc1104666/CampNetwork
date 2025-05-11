@@ -1,6 +1,6 @@
 from .models import User
 import random
-from sqlalchemy import select, and_, desc, func, or_
+from sqlalchemy import select
 from libs.eth_async.utils.utils import parse_proxy
 
 
@@ -8,8 +8,8 @@ class DB:
     def __init__(self, session):
         self.session = session
 
-
-    async def add_wallet(self, private_key: str, public_key: str,user_agent: str, proxy: str | None = None):
+    async def add_wallet(self, private_key: str, public_key: str, user_agent: str, proxy: str | None = None):
+        """Добавляет кошелек в базу данных"""
         wallet = User(
             private_key=private_key,
             public_key=public_key,
@@ -18,11 +18,13 @@ class DB:
         )
         try:
             self.session.add(wallet)
+            await self.session.flush()  # Проверяем наличие ошибок при добавлении
         except Exception as e:
-            print(e)
-            return
+            return False
+        return True
 
     async def update_proxy(self, user_id: int, available_proxies: list):
+        """Обновляет прокси для пользователя"""
         existing_proxies = await self.session.execute(select(User.proxy))
         existing_proxies = {proxy[0] for proxy in existing_proxies.all()}  # Преобразуем в множество
 
@@ -45,29 +47,7 @@ class DB:
             raise ValueError(f"Пользователь с id {user_id} не найден")
 
     async def get_all_wallets(self) -> list:
+        """Получает все кошельки из базы данных"""
         result = await self.session.execute(select(User))  # выполняем запрос ко всем записям в таблице
         wallets = result.scalars().all()  # возвращаем все строки из таблицы как список
         return wallets
-
-    async def update_session(self, id, session_token: str, session_id: str, session_expires: str):
-        """Обновляет сессионные данные для пользователя"""
-        try:
-            user = await self.session.get(User, id)
-            if not user:
-                return False
-            
-            user.camp_session_token = session_token
-            user.camp_session_user_id = session_id  # Исправлено имя поля
-            user.camp_session_expires = session_expires
-            await self.session.commit()
-            return True
-        except Exception as e:
-            await self.session.rollback()
-            return False
-
-    async def get_quests_wallets(self) -> list:
-        res = select(User).filter(
-            User.camp_session_token.isnot(None)
-        )
-        wallets = (await self.session.scalars(res)).all()
-        return list(wallets)
