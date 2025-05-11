@@ -64,3 +64,10 @@ class DB:
         except Exception as e:
             await self.session.rollback()
             return False
+
+    async def get_quests_wallets(self) -> list:
+        res = select(User).filter(
+            User.camp_session_token.isnot(None)
+        )
+        wallets = (await self.session.scalars(res)).all()
+        return list(wallets)
