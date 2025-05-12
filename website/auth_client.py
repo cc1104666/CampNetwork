@@ -1,4 +1,6 @@
 import json
+import asyncio
+import random
 from datetime import datetime
 from typing import Dict, Optional, Tuple
 from loguru import logger
@@ -122,12 +124,12 @@ class AuthClient(BaseHttpClient):
             logger.error(f"{self.user} не удалось получить nonce: {response}")
             return False
     
-    async def get_csrf_token(self) -> bool:
+    async def get_csrf_token(self) -> bool | str:
         """
-        Получает CSRF токен
+        Получает CSRF токен с проверкой на ограничение запросов
         
         Returns:
-            Статус успеха
+            Статус успеха или строка с кодом ошибки
         """
         headers = await self.get_headers({
             'Content-Type': 'application/json',
@@ -147,9 +149,14 @@ class AuthClient(BaseHttpClient):
             logger.info(f"{self.user} получил CSRF токен: {self.csrf_token[:10]}...")
             return True
         else:
-            logger.error(f"{self.user} не удалось получить CSRF токен: {response}")
-            return False
-    
+            # Проверяем на ошибку о превышении лимита запросов
+            if isinstance(response, dict) and response.get("message") == "Too many requests, please try again later.":
+                logger.warning(f"{self.user} превышен лимит запросов при получении CSRF токена")
+                return "RATE_LIMIT"
+            else:
+                logger.error(f"{self.user} не удалось получить CSRF токен: {response}")
+                return False
+
     async def sign_message(self) -> Tuple[Optional[Dict], Optional[str]]:
         """
         Подписывает сообщение для авторизации
@@ -291,7 +298,7 @@ class AuthClient(BaseHttpClient):
 
     async def login(self) -> bool:
         """
-        Полный процесс авторизации
+        Полный процесс авторизации с обработкой ограничения запросов
         
         Returns:
             Статус успеха
@@ -309,8 +316,20 @@ class AuthClient(BaseHttpClient):
             if not await self.get_nonce():
                 return False
                 
-            # Шаг 4: Получаем CSRF токен
-            if not await self.get_csrf_token():
+            # Шаг 4: Получаем CSRF токен с обработкой ограничения запросов
+            csrf_result = await self.get_csrf_token()
+            
+            # Если получили ошибку о слишком частых запросах - добавляем обработку
+            if csrf_result == "RATE_LIMIT":
+                # Ставим аккаунт в таймаут на 5-10 минут (300-600 секунд)
+                timeout_duration = random.uniform(300, 600)
+                logger.warning(f"{self.user} достигнут лимит запросов, ожидаем {int(timeout_duration)} секунд перед повторной попыткой")
+                await asyncio.sleep(timeout_duration)
+                
+                # Повторяем попытку получения CSRF токена
+                if not await self.get_csrf_token():
+                    return False
+            elif not csrf_result:
                 return False
                 
             # Шаг 5: Аутентифицируемся с подписанным сообщением

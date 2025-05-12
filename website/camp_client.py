@@ -45,9 +45,10 @@ class CampNetworkClient:
         else:
             return False
     
+
     async def complete_all_quests(self, retry_failed: bool = True, max_retries: int = 3) -> Dict[str, bool]:
         """
-        Выполняет все незавершенные задания
+        Выполняет все незавершенные задания с обработкой ошибок
         
         Args:
             retry_failed: Повторять ли неудачные задания
@@ -59,7 +60,14 @@ class CampNetworkClient:
         # Проверяем, авторизованы ли мы
         if not self.auth_client.user_id or not self.quest_client.user_id:
             logger.info(f"{self.user} не авторизован, выполняю авторизацию")
-            if not await self.login():
+            auth_result = await self.login()
+            
+            if not auth_result:
+                # Если получили ошибку о превышении лимита запросов
+                if isinstance(auth_result, str) and auth_result == "RATE_LIMIT":
+                    logger.warning(f"{self.user} аккаунт поставлен в ожидание из-за ограничения запросов")
+                    return {"status": "RATE_LIMITED"}
+                
                 logger.error(f"{self.user} не удалось авторизоваться, выполнение заданий невозможно")
                 return {}
         
@@ -68,10 +76,10 @@ class CampNetworkClient:
             retry_failed=retry_failed, 
             max_retries=max_retries
         )
-    
+
     async def complete_specific_quests(self, quest_names: List[str]) -> Dict[str, bool]:
         """
-        Выполняет только указанные задания
+        Выполняет только указанные задания с обработкой ошибок
         
         Args:
             quest_names: Список названий заданий
@@ -82,7 +90,14 @@ class CampNetworkClient:
         # Проверяем, авторизованы ли мы
         if not self.auth_client.user_id or not self.quest_client.user_id:
             logger.info(f"{self.user} не авторизован, выполняю авторизацию")
-            if not await self.login():
+            auth_result = await self.login()
+            
+            if not auth_result:
+                # Если получили ошибку о превышении лимита запросов
+                if isinstance(auth_result, str) and auth_result == "RATE_LIMIT":
+                    logger.warning(f"{self.user} аккаунт поставлен в ожидание из-за ограничения запросов")
+                    return {"status": "RATE_LIMITED"}
+                
                 logger.error(f"{self.user} не удалось авторизоваться, выполнение заданий невозможно")
                 return {}
         

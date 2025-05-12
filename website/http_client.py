@@ -1,4 +1,6 @@
 import asyncio
+import random
+import json
 import aiohttp
 from typing import Dict, Tuple, Union, Optional
 from loguru import logger
@@ -47,7 +49,7 @@ class BaseHttpClient:
             base_headers.update(additional_headers)
             
         return base_headers
-    
+
     async def request(
         self, 
         url: str, 
@@ -119,12 +121,35 @@ class BaseHttpClient:
                             
                             # Проверяем, может быть проблема с авторизацией
                             if resp.status == 401 or resp.status == 403:
-                                if not "!DOCTYPE" in response_text:
+                                if "!DOCTYPE" not in response_text:
                                     logger.error(f"{self.user} ошибка авторизации: {response_text}")
                                 return False, response_text
-                                
-                            return False, response_text
                             
+                            # Проверяем на ограничение запросов
+                            if resp.status == 429:
+                                logger.warning(f"{self.user} превышен лимит запросов (429)")
+                                
+                                # Если это не последняя попытка, делаем большую задержку и пробуем снова
+                                if attempt < retries - 1:
+                                    wait_time = random.uniform(60, 120)  # 1-2 минуты
+                                    logger.info(f"{self.user} ожидание {int(wait_time)} секунд перед следующей попыткой")
+                                    await asyncio.sleep(wait_time)
+                                    continue
+                                
+                                # Парсим ответ, чтобы получить возможный JSON с сообщением об ошибке
+                                try:
+                                    error_json = json.loads(response_text)
+                                    return False, error_json
+                                except:
+                                    return False, "RATE_LIMIT"
+                                    
+                            # Парсим ответ, чтобы получить возможный JSON с сообщением об ошибке
+                            try:
+                                error_json = json.loads(response_text)
+                                return False, error_json
+                            except:
+                                return False, response_text
+                                
                         elif 500 <= resp.status < 600:
                             logger.warning(f"{self.user} получен статус {resp.status}, повторная попытка {attempt+1}/{retries}")
                             await asyncio.sleep(2 ** attempt)  # Экспоненциальная задержка

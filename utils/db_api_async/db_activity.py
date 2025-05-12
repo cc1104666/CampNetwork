@@ -1,6 +1,7 @@
 from .models import User
 import random
-from sqlalchemy import select
+import json
+from sqlalchemy import select, update, text
 from libs.eth_async.utils.utils import parse_proxy
 
 
@@ -51,3 +52,83 @@ class DB:
         result = await self.session.execute(select(User))  # выполняем запрос ко всем записям в таблице
         wallets = result.scalars().all()  # возвращаем все строки из таблицы как список
         return wallets
+
+    async def mark_quest_completed(self, user_id: int, quest_id: str) -> bool:
+        """
+        Отмечает задание как выполненное для указанного пользователя
+        
+        Args:
+            user_id: ID пользователя
+            quest_id: ID выполненного задания
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            # Получаем пользователя
+            user = await self.session.get(User, user_id)
+            if not user:
+                return False
+            
+            # Получаем текущие выполненные квесты
+            completed_quests = user.completed_quests.split(',') if user.completed_quests else []
+            
+            # Добавляем задание, если его там нет
+            if quest_id not in completed_quests:
+                completed_quests.append(quest_id)
+            
+            # Обновляем поле в БД
+            user.completed_quests = ','.join(completed_quests)
+            await self.session.commit()
+            
+            return True
+            
+        except Exception as e:
+            return False
+
+    async def is_quest_completed(self, user_id: int, quest_id: str) -> bool:
+        """
+        Проверяет, выполнено ли задание указанным пользователем
+        
+        Args:
+            user_id: ID пользователя
+            quest_id: ID задания
+            
+        Returns:
+            Статус выполнения
+        """
+        try:
+            # Получаем пользователя
+            user = await self.session.get(User, user_id)
+            if not user or not user.completed_quests:
+                return False
+            
+            # Проверяем, есть ли задание в списке выполненных
+            completed_quests = user.completed_quests.split(',')
+            return quest_id in completed_quests
+            
+        except Exception as e:
+            return False
+
+    async def get_completed_quests(self, user_id: int) -> list:
+        """
+        Получает список выполненных заданий для указанного пользователя
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            Список выполненных заданий (ID)
+        """
+        try:
+            # Получаем пользователя
+            user = await self.session.get(User, user_id)
+            if not user or not user.completed_quests:
+                return []
+            
+            # Возвращаем список выполненных заданий
+            return user.completed_quests.split(',')
+            
+        except Exception as e:
+            return []
+

@@ -1,11 +1,9 @@
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Text
-
+from sqlalchemy import Text, ARRAY, String
 
 class Base(DeclarativeBase):
     pass
-
 
 class User(Base):
     __tablename__ = 'soneium'
@@ -15,6 +13,7 @@ class User(Base):
     public_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     proxy: Mapped[str] = mapped_column(Text, nullable=True, unique=False)
     user_agent: Mapped[str] = mapped_column(Text, nullable=False, unique=False)
+    completed_quests: Mapped[str] = mapped_column(Text, nullable=True, default="")  # Просто строка с разделителями
 
     def __str__(self):
         return f'{self.public_key}'

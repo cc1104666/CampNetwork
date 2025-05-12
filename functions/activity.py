@@ -3,6 +3,7 @@ from loguru import logger
 import random
 import asyncio
 from website.camp_client import CampNetworkClient
+from website.quest_client import QuestClient
 from libs.eth_async.client import Client
 from libs.eth_async.utils.utils import parse_proxy
 from libs.eth_async.data.models import Networks
@@ -78,15 +79,13 @@ async def complete_all_wallets_quests(quest_list=None):
         # Анализируем результаты
         success_count = sum(1 for result in results if result is True)
         error_count = sum(1 for result in results if isinstance(result, Exception))
-        failed_count = len(results) - success_count - error_count
-        
-        logger.info(f"Обработка завершена: успешно {success_count}, с ошибками {failed_count}, исключений {error_count}")
+        logger.info(f"Обработка завершена: успешно {success_count}, с ошибками {error_count}")
         
     except Exception as e:
         logger.error(f"Ошибка при выполнении заданий для всех кошельков: {str(e)}")
 
 async def process_wallet_with_all_quests(wallet):
-    """Обрабатывает все задания для одного кошелька"""
+    """Обрабатывает все задания для одного кошелька с расширенной обработкой ошибок"""
     try:
         logger.info(f'Начинаю работу с {wallet}')
         
@@ -95,6 +94,11 @@ async def process_wallet_with_all_quests(wallet):
         
         # Выполняем все задания
         results = await camp_client.complete_all_quests()
+        
+        # Проверяем, не был ли аккаунт ограничен по запросам
+        if isinstance(results, dict) and results.get("status") == "RATE_LIMITED":
+            logger.warning(f"{wallet} ограничен по запросам, пропускаем")
+            return False
         
         # Анализируем результаты
         if not results:
@@ -114,7 +118,7 @@ async def process_wallet_with_all_quests(wallet):
         return False
 
 async def process_wallet_with_specific_quests(wallet, quest_list):
-    """Обрабатывает указанные задания для одного кошелька"""
+    """Обрабатывает указанные задания для одного кошелька с расширенной обработкой ошибок"""
     try:
         logger.info(f'Начинаю работу с {wallet} для заданий: {", ".join(quest_list)}')
         
@@ -123,6 +127,11 @@ async def process_wallet_with_specific_quests(wallet, quest_list):
         
         # Выполняем указанные задания
         results = await camp_client.complete_specific_quests(quest_list)
+        
+        # Проверяем, не был ли аккаунт ограничен по запросам
+        if isinstance(results, dict) and results.get("status") == "RATE_LIMITED":
+            logger.warning(f"{wallet} ограничен по запросам, пропускаем")
+            return False
         
         # Анализируем результаты
         if not results:
@@ -142,7 +151,7 @@ async def process_wallet_with_specific_quests(wallet, quest_list):
         return False
 
 async def get_wallets_stats():
-    """Получает статистику по всем кошелькам"""
+    """Получает статистику по всем кошелькам из базы данных"""
     try:
         async with Session() as session:
             db = DB(session=session)
@@ -154,17 +163,31 @@ async def get_wallets_stats():
         
         logger.info(f"Получаю статистику для {len(wallets)} кошельков")
         
+        # Создаем словарь для обратного поиска названий по ID
+        quest_names_by_id = {quest_id: quest_name for quest_name, quest_id in QuestClient.QUEST_IDS.items()}
+        
         # Создаем словарь для хранения статистики
         stats = {}
         
-        # Для каждого кошелька получаем статистику
+        # Для каждого кошелька получаем статистику из БД
         for wallet in wallets:
             try:
-                # Создаем клиент CampNetwork
-                camp_client = CampNetworkClient(user=wallet)
+                # Получаем список выполненных квестов
+                completed_quests_ids = wallet.completed_quests.split(',') if wallet.completed_quests else []
+                completed_count = len(completed_quests_ids) if completed_quests_ids[0] != '' else 0
                 
-                # Авторизуемся и получаем статистику
-                stats[wallet.public_key] = await camp_client.get_stats()
+                # Получаем названия выполненных заданий по их ID
+                completed_quest_names = [
+                    quest_names_by_id.get(quest_id, f"Unknown ({quest_id})")
+                    for quest_id in completed_quests_ids 
+                    if quest_id != ''
+                ]
+                
+                stats[wallet.public_key] = {
+                    "completed_count": completed_count,
+                    "total_count": len(QuestClient.QUEST_IDS),
+                    "completed_quests": completed_quest_names
+                }
                 
             except Exception as e:
                 stats[wallet.public_key] = {"error": str(e)}
@@ -175,7 +198,9 @@ async def get_wallets_stats():
             if "error" in wallet_stats:
                 logger.warning(f"{wallet_key}: {wallet_stats['error']}")
             else:
-                logger.info(f"{wallet_key}: {wallet_stats['completed_count']}/{wallet_stats['total_count']} заданий, {wallet_stats['total_points']} баллов")
+                logger.info(f"{wallet_key}: {wallet_stats['completed_count']}/{wallet_stats['total_count']} заданий")
+                if wallet_stats['completed_count'] > 0:
+                    logger.info(f"  Выполненные задания: {', '.join(wallet_stats['completed_quests'])}")
                 
         return stats
             
