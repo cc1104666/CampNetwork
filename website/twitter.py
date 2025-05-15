@@ -71,7 +71,32 @@ class TwitterClient(BaseHttpClient):
         # Статус соединения Twitter с CampNetwork
         self.is_connected = False
         self.twitter_client = None
-        
+        self.TWITTER_QUESTS_MAP = {
+                "Follow": {
+                    "StoryChain_ai": "4cebe3ff-4dae-4858-9323-8b669d80e45c",
+                    "tokentails": "cf5a23b1-d48c-4ab9-a74c-785394158224",
+                    "PanenkaFC90": "040ead29-7436-4457-b7cd-8bd2a8855a49",
+                    "ScorePlay_xyz": "5f03c7d8-8ee0-443f-a0ad-8fda68dfecd8",
+                    "wideworlds_ai": "42936f26-3ec6-401f-8ed0-62af343f1fc4",
+                    "pets_ww": "242ab4dc-2df4-4b97-bcd7-b013ff6635a1",
+                    "chronicle_ww": "e47be0b8-eedc-445e-a53e-b2f05daabe3c",
+                    "PictographsNFT": "4e467350-a49b-4413-8fce-4d424d3303bb",
+                    "entertainm_io": "beb6df6d-b225-46e5-8a4f-20ad967fb4a8",
+                    "bleetz_io": "01bc9433-359f-4403-9bc8-4295d47dc3c8",
+                    "RewardedTV_": "87c040a3-060a-4000-b271-051603417e8b",
+                    "Fantasy_cristal": "17681189-fd69-4aa3-b533-8f452c1bab0c",
+                    "belgranofantasy": "1cdb82f7-7878-46fc-baec-b75d6e414a25",
+                    "awanalab": "1a81cbe5-a792-4921-baa0-0c36165e0d7c",
+                    "arcoin_official": "b852ec9b-7af5-4f07-a677-1bc630bf4579",
+                    "TheMetakraft": "39b41034-ce80-4057-8cca-e95992182f04",
+                    "summitx_finance": "12b177a5-aa4e-47c6-aaa9-b14bf9481d0a",
+                    "thepixudi": "009c0d38-dc3c-4d37-b558-38ece673724a",
+                    "clustersxyz": "c7d0e2c8-87e7-46df-81f3-48f311735c22",
+                    "JukebloxDapp": "02e3d5b3-e65e-41c8-b159-405f48255cdf",
+                    "campnetworkxyz": "2660f24a-e3ac-4093-8c16-7ae718c00731",
+                }
+            }
+
     async def initialize(self) -> bool:
         """
         Инициализирует клиент Twitter
@@ -374,37 +399,105 @@ class TwitterClient(BaseHttpClient):
             return False
     
 
-    async def follow_accounts(self, account_names: List[str]) -> Dict[str, bool]:
+    async def complete_twitter_follow_quests(self, target_accounts: List[str]) -> Dict[str, bool]:
         """
-        Подписывается на указанные аккаунты в Twitter
+        Выполняет задания подписки на указанные аккаунты
         
         Args:
-            account_names: Список имен аккаунтов для подписки
+            target_accounts: Список аккаунтов для подписки
             
         Returns:
-            Словарь результатов подписки на каждый аккаунт
+            Результаты выполнения заданий {аккаунт: успех}
         """
         results = {}
         
-        # Получаем настройки задержек
-        settings = Settings()
-        min_delay, max_delay = settings.get_twitter_action_delay()
-        
-        for account_name in account_names:
-            # Добавляем случайную задержку между подписками
-            await asyncio.sleep(random.uniform(min_delay, max_delay))
+        for account in target_accounts:
+            # Получаем ID задания для этого аккаунта
+            quest_id = self.TWITTER_QUESTS_MAP.get("Follow", {}).get(account)
+            if not quest_id:
+                logger.warning(f"{self.user} нет ID задания для подписки на {account}")
+                results[account] = False
+                continue
+                
+            # Проверяем, выполнено ли уже задание
+            is_completed = False
+            try:
+                async with Session() as session:
+                    db = DB(session=session)
+                    is_completed = await db.is_quest_completed(self.user.id, quest_id)
+            except Exception as e:
+                logger.error(f"{self.user} ошибка при проверке статуса задания: {str(e)}")
+                
+            if is_completed:
+                logger.info(f"{self.user} задание подписки на {account} уже выполнено")
+                results[account] = True
+                continue
+                
+            # Выполняем подписку
+            follow_success = await self.follow_account(account)
+            if not follow_success:
+                logger.error(f"{self.user} не удалось подписаться на {account}")
+                results[account] = False
+                continue
+                
+            settings = Settings()
+            min_quest_delay, max_quest_delay = settings.get_twitter_quest_delay()
+            random_sleep = random.uniform(min_quest_delay, max_quest_delay)
+            # Отправляем запрос на выполнение задания
+            complete_url = f"{self.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
             
-            result = await self.follow_account(account_name)
-            results[account_name] = result
+            headers = await self.auth_client.get_headers({
+                'Content-Type': 'application/json',
+                'Origin': 'https://loyalty.campnetwork.xyz',
+            })
             
-            # Если не удалось подписаться, делаем паузу подольше
-            if not result:
-                await asyncio.sleep(random.uniform(min_delay * 2, max_delay * 2))
-        
-        # Общий результат
-        success_count = sum(1 for result in results.values() if result)
-        logger.info(f"{self.user} выполнено {success_count} из {len(results)} подписок")
-        
+            success, response = await self.auth_client.request(
+                url=complete_url,
+                method="POST",
+                json_data={},
+                headers=headers
+            )
+            
+            if success:
+                logger.success(f"{self.user} успешно выполнил задание подписки на {account}")
+                
+                # Отмечаем задание как выполненное в БД
+                try:
+                    async with Session() as session:
+                        db = DB(session=session)
+                        await db.mark_quest_completed(self.user.id, quest_id)
+                        results[account] = True
+                    await asyncio.sleep(random_sleep)
+                except Exception as e:
+                    logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
+                    results[account] = False
+                    logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
+                    await asyncio.sleep(random_sleep)
+
+            else:
+                # Проверка на "You have already been rewarded"
+                if isinstance(response, dict) and response.get("message") == "You have already been rewarded" and response.get("rewarded") is True:
+                    logger.info(f"{self.user} задание подписки на {account} уже выполнено ранее")
+                    
+                    # Отмечаем задание как выполненное в БД
+                    try:
+                        async with Session() as session:
+                            db = DB(session=session)
+                            await db.mark_quest_completed(self.user.id, quest_id)
+                        results[account] = True
+                        logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
+                        await asyncio.sleep(random_sleep)
+                    except Exception as e:
+                        logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
+                        results[account] = False
+                        logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
+                        await asyncio.sleep(random_sleep)
+                else:
+                    logger.error(f"{self.user} ошибка при выполнении задания подписки на {account}: {response}")
+                    results[account] = False
+                    logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
+                    await asyncio.sleep(random_sleep)
+                    
         return results
         
     async def post_tweet(self, text: str) -> Optional[Any]:
@@ -520,7 +613,7 @@ class TwitterClient(BaseHttpClient):
             
             # Задание на подписку
             if "Follow" in quest_name and target_accounts:
-                follow_results = await self.follow_accounts(target_accounts)
+                follow_results = await self.complete_twitter_follow_quests(target_accounts)
                 quest_success = any(follow_results.values())
             
             # Задание на публикацию твита
@@ -605,8 +698,27 @@ class TwitterQuestManager:
 
     # Список аккаунтов для подписки по умолчанию
     DEFAULT_FOLLOW_ACCOUNTS = [
-        "test",
-        # Добавьте другие аккаунты по необходимости
+        "StoryChain_ai",
+        "tokentails",
+        "PanenkaFC90",
+        "ScorePlay_xyz",
+        "wideworlds_ai",
+        "pets_ww",
+        "chronicle_ww",
+        "PictographsNFT",
+        "entertainm_io",
+        "bleetz_io",
+        "RewardedTV_",
+        "Fantasy_cristal",
+        "belgranofantasy",
+        "awanalab",
+        "arcoin_official",
+        "TheMetakraft",
+        "summitx_finance",
+        "thepixudi",
+        "clustersxyz",
+        "JukebloxDapp",
+        "campnetworkxyz",
     ]
     
     # Шаблоны твитов по умолчанию
@@ -747,13 +859,17 @@ class TwitterQuestManager:
                             return False
                 # Выполняем задание подписки
                 if follow_accounts:
-                    results["TwitterFollow"] = await twitter_client.complete_twitter_quest(
-                        quest_name="TwitterFollow",
-                        target_accounts=follow_accounts
-                    )
-                    
-                    # Задержка между заданиями
-                    await asyncio.sleep(random.uniform(min_quest_delay, max_quest_delay))
+                    follow_results = await twitter_client.complete_twitter_follow_quests(follow_accounts)
+                    results["TwitterFollow"] = any(follow_results.values())  # Успешно, если хотя бы одно задание выполнено
+
+                # if follow_accounts:
+                #     results["TwitterFollow"] = await twitter_client.complete_twitter_quest(
+                #         quest_name="TwitterFollow",
+                #         target_accounts=follow_accounts
+                #     )
+                #     
+                #     # Задержка между заданиями
+                #     await asyncio.sleep(random.uniform(min_quest_delay, max_quest_delay))
                 
                 # Выполняем задание публикации твита
                 if tweet_text:
