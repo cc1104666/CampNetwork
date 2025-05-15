@@ -1,7 +1,6 @@
-
 from libs.eth_async.utils.files import read_json
 from libs.eth_async.classes import AutoRepr, Singleton
-from data.config import SETTINGS_FILE 
+from data.config import SETTINGS_FILE, ACTUAL_FOLLOWS_TWITTER
 
 class Settings(Singleton, AutoRepr):
     def __init__(self):
@@ -14,6 +13,9 @@ class Settings(Singleton, AutoRepr):
         self.twitter_delay_quests_min = json_data.get('twitter', {}).get('delay_between_quests', {}).get('min', 300)
         self.twitter_delay_quests_max = json_data.get('twitter', {}).get('delay_between_quests', {}).get('max', 600)
         
+        # Twitter аккаунты для подписки
+        self.twitter_follow_accounts = ACTUAL_FOLLOWS_TWITTER
+        
         # Настройки обычных квестов
         self.quest_delay_min = json_data.get('quests', {}).get('delay_between_quests', {}).get('min', 20)
         self.quest_delay_max = json_data.get('quests', {}).get('delay_between_quests', {}).get('max', 40)
@@ -24,6 +26,10 @@ class Settings(Singleton, AutoRepr):
         
         self.wallet_startup_delay_min = json_data.get('wallets', {}).get('startup_delay', {}).get('min', 5)
         self.wallet_startup_delay_max = json_data.get('wallets', {}).get('startup_delay', {}).get('max', 15)
+        
+        # Настройки ресурсов
+        self.resources_auto_replace = json_data.get('resources', {}).get('auto_replace', True)
+        self.resources_max_failures = json_data.get('resources', {}).get('max_failures', 3)
     
     def get_twitter_action_delay(self) -> tuple:
         """Возвращает диапазон задержки между действиями в Twitter"""
@@ -44,3 +50,7 @@ class Settings(Singleton, AutoRepr):
     def get_wallet_range(self) -> tuple:
         """Возвращает диапазон индексов кошельков для обработки"""
         return self.wallet_range_start, self.wallet_range_end
+    
+    def get_resource_settings(self) -> tuple:
+        """Возвращает настройки управления ресурсами"""
+        return self.resources_auto_replace, self.resources_max_failures

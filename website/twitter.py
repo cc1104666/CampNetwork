@@ -88,7 +88,13 @@ class TwitterClient(BaseHttpClient):
         # Инициализируем клиент как None
         self.twitter_client = None
         self.is_connected = False
+        
+        # Добавляем поля для отслеживания ошибок
+        self.last_error = None
+        self.error_count = 0
+        self.settings = Settings()
 
+    
     async def initialize(self) -> bool:
         """
         Инициализирует клиент Twitter
@@ -110,13 +116,49 @@ class TwitterClient(BaseHttpClient):
                 logger.success(f"{self.user} Twitter клиент инициализирован")
                 return True
             else:
-                logger.error(f"{self.user} проблема со статусом Twitter аккаунта: {self.twitter_account.status}")
+                error_msg = f"Проблема со статусом Twitter аккаунта: {self.twitter_account.status}"
+                logger.error(f"{self.user} {error_msg}")
+                self.last_error = error_msg
+                self.error_count += 1
+                
+                # Если проблема с авторизацией, отмечаем токен как плохой
+                if self.twitter_account.status in [twitter.AccountStatus.BAD_TOKEN, twitter.AccountStatus.SUSPENDED]:
+                    from resource_manager import ResourceManager
+                    resource_manager = ResourceManager()
+                    await resource_manager.mark_twitter_as_bad(self.user.id)
+                    
+                    # Если включена автозамена, пробуем заменить токен
+                    auto_replace, _ = self.settings.get_resource_settings()
+                    if auto_replace:
+                        success, message = await resource_manager.replace_twitter(self.user.id)
+                        if success:
+                            logger.info(f"{self.user} токен Twitter автоматически заменен: {message}")
+                            # Пробуем с новым токеном (в другом методе)
+                
                 return False
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при инициализации Twitter клиента: {str(e)}")
+            error_msg = f"Ошибка при инициализации Twitter клиента: {str(e)}"
+            logger.error(f"{self.user} {error_msg}")
+            self.last_error = error_msg
+            self.error_count += 1
+            
+            # Проверяем, указывает ли ошибка на проблемы с авторизацией
+            if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+                from resource_manager import ResourceManager
+                resource_manager = ResourceManager()
+                await resource_manager.mark_twitter_as_bad(self.user.id)
+                
+                # Если включена автозамена, пробуем заменить токен
+                auto_replace, _ = self.settings.get_resource_settings()
+                if auto_replace:
+                    success, message = await resource_manager.replace_twitter(self.user.id)
+                    if success:
+                        logger.info(f"{self.user} токен Twitter автоматически заменен: {message}")
+                        # Пробуем с новым токеном (в другом методе)
+                
             return False
-    
+
     async def close(self):
         """Закрывает соединение с Twitter"""
         if self.twitter_client:
@@ -225,7 +267,7 @@ class TwitterClient(BaseHttpClient):
                 }
                 
                 # Используем метод запроса из BaseHttpClient
-                callback_success, callback_response = await self.request(
+                callback_success, callback_response = await self.auth_client.request(
                     url=callback_url,
                     method="GET",
                     headers=callback_headers,
@@ -585,19 +627,13 @@ class TwitterClient(BaseHttpClient):
                                      tweet_id_to_like: int | None = None,
                                      tweet_id_to_retweet: int | None = None) -> bool:
         """
-        Выполняет Twitter задания
+        Выполняет Twitter задания с улучшенной обработкой ошибок
         
-        Args:
-            follow_accounts: Список аккаунтов для подписки
-            tweet_text: Текст твита для публикации
-            tweet_id_to_like: ID твита для лайка
-            tweet_id_to_retweet: ID твита для ретвита
-            
         Returns:
             Статус успеха
         """
-        settings = Settings()
-        min_delay, max_delay = settings.get_twitter_quest_delay()
+        min_delay, max_delay = self.settings.get_twitter_quest_delay()
+        auto_replace, max_failures = self.settings.get_resource_settings()
         
         success_count = 0
         total_tasks = 0
@@ -605,14 +641,34 @@ class TwitterClient(BaseHttpClient):
         try:
             # Инициализируем клиент
             if not await self.initialize():
-                logger.error(f"{self.user} не удалось инициализировать Twitter клиент")
-                return False
-            
-            # Проверяем подключение и подключаем Twitter при необходимости
-            if not self.is_connected and not await self.check_twitter_connection_status():
-                logger.info(f"{self.user} Twitter не подключен, выполняю подключение")
-                if not await self.connect_twitter_to_camp():
-                    logger.error(f"{self.user} не удалось подключить Twitter")
+                # Если инициализация не удалась и у нас есть последняя ошибка, проверяем,
+                # можно ли заменить токен автоматически
+                if self.last_error and auto_replace:
+                    from resource_manager import ResourceManager
+                    resource_manager = ResourceManager()
+                    success, message = await resource_manager.replace_twitter(self.user.id)
+                    
+                    if success:
+                        logger.info(f"{self.user} токен Twitter заменен автоматически: {message}")
+                        # Получаем новый токен и пробуем заново
+                        async with Session() as session:
+                            updated_wallet = await session.get(User, self.user.id)
+                            if updated_wallet and updated_wallet.twitter_token:
+                                # Обновляем токен в текущем экземпляре
+                                self.twitter_account.auth_token = updated_wallet.twitter_token
+                                # Пробуем снова инициализировать
+                                if await self.initialize():
+                                    logger.success(f"{self.user} успешная реинициализация с новым токеном Twitter")
+                                else:
+                                    logger.error(f"{self.user} не удалось инициализировать с новым токеном Twitter")
+                                    return False
+                            else:
+                                return False
+                    else:
+                        logger.error(f"{self.user} не удалось заменить токен Twitter: {message}")
+                        return False
+                else:
+                    logger.error(f"{self.user} не удалось инициализировать Twitter клиент")
                     return False
             
             # Выполняем задания в случайном порядке
@@ -663,7 +719,24 @@ class TwitterClient(BaseHttpClient):
                             success_count += 1
                 
                 except Exception as e:
-                    logger.error(f"{self.user} ошибка при выполнении {task_type} задания: {str(e)}")
+                    error_msg = f"Ошибка при выполнении {task_type} задания: {str(e)}"
+                    logger.error(f"{self.user} {error_msg}")
+                    self.last_error = error_msg
+                    self.error_count += 1
+                    
+                    # Проверяем, указывает ли ошибка на проблемы с авторизацией или прокси
+                    if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+                        from resource_manager import ResourceManager
+                        resource_manager = ResourceManager()
+                        await resource_manager.mark_twitter_as_bad(self.user.id)
+                    
+                    if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
+                        from resource_manager import ResourceManager
+                        resource_manager = ResourceManager()
+                        
+                        # Если достигнут порог ошибок, отмечаем прокси как плохое
+                        if self.error_count >= max_failures:
+                            await resource_manager.mark_proxy_as_bad(self.user.id)
                 
                 # Добавляем задержку между заданиями, если это не последнее задание
                 if i < len(task_types) - 1:
@@ -686,5 +759,24 @@ class TwitterClient(BaseHttpClient):
         except Exception as e:
             # Закрываем клиент Twitter в случае ошибки
             await self.close()
-            logger.error(f"{self.user} ошибка при выполнении Twitter заданий: {str(e)}")
+            error_msg = f"ошибка при выполнении Twitter заданий: {str(e)}"
+            logger.error(f"{self.user} {error_msg}")
+            self.last_error = error_msg
+            self.error_count += 1
+            
+            # Проверяем, может быть проблема с прокси
+            if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
+                from resource_manager import ResourceManager
+                resource_manager = ResourceManager()
+                
+                # Если достигнут порог ошибок, отмечаем прокси как плохое
+                if self.error_count >= max_failures:
+                    await resource_manager.mark_proxy_as_bad(self.user.id)
+            
+            # Проверяем, может быть проблема с токеном Twitter
+            if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+                from resource_manager import ResourceManager
+                resource_manager = ResourceManager()
+                await resource_manager.mark_twitter_as_bad(self.user.id)
+                
             return False

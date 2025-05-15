@@ -47,10 +47,12 @@ class AuthClient(BaseHttpClient):
             logger.info(f"{self.user} выполняю начальный запрос для проверки Cloudflare защиты")
             
             # Проверяем наличие Cloudflare защиты
-            success, cf_clearance = await self.cloudflare.handle_cloudflare_protection(
-                url=f"{self.BASE_URL}/home"
-            )
             
+            success, response = await self.request(
+                url=f"{self.BASE_URL}/home",
+                method="GET",
+                check_cloudflare=True  # Включаем автоматическую проверку и обработку Cloudflare
+            )
             if success:
                 logger.success(f"{self.user} начальный запрос успешен")
                 return True

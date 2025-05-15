@@ -19,6 +19,14 @@ def create_files():
     if not os.path.exists(config.TWITTER_FILE):
         with open(config.TWITTER_FILE, 'w') as f:
             pass
+            
+    # Создаем файлы для резервных ресурсов
+    if not os.path.exists(config.RESERVE_PROXY_FILE):
+        with open(config.RESERVE_PROXY_FILE, 'w') as f:
+            pass
+    if not os.path.exists(config.RESERVE_TWITTER_FILE):
+        with open(config.RESERVE_TWITTER_FILE, 'w') as f:
+            pass
 
     try:
         current_settings: dict | None = read_json(path=config.SETTINGS_FILE)
@@ -55,8 +63,12 @@ def create_files():
                 "min": 0,   # секунды
                 "max": 7200   # секунды
             }
+        },
+        # Настройки ресурсов
+        "resources": {
+            "auto_replace": True,  # Автоматическая замена плохих ресурсов
+            "max_failures": 3      # Максимальное количество ошибок до отметки ресурса как плохого
         }
     }
     write_json(path=config.SETTINGS_FILE, obj=update_dict(modifiable=current_settings, template=settings), indent=2)
 create_files()
-

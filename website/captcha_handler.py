@@ -226,11 +226,7 @@ class CloudflareHandler:
                     
         return captcha_token
     
-    async def handle_cloudflare_protection(self, url: str, method: str = "GET", 
-                                           data: Optional[Dict] = None, 
-                                           json_data: Optional[Dict] = None,
-                                           headers: Optional[Dict] = None,
-                                           allow_redirects: bool = True) -> Tuple[bool, Union[Dict, str]]:
+    async def handle_cloudflare_protection(self, html: str) -> bool:
         """
         Обрабатывает защиту Cloudflare
         
@@ -242,43 +238,22 @@ class CloudflareHandler:
             (bool, cf_clearance): Статус успеха и токен cf_clearance
         """
         try:
-            logger.info(f"{self.http_client.user} проверка наличия Cloudflare Turnstile защиты")
-            
-            # Делаем начальный запрос для проверки наличия Cloudflare
-            success, response = await self.http_client.request(url=url, method=method, data=data, json_data=json_data, headers=headers, allow_redirects=allow_redirects)
-            
-            # Если запрос успешен, защиты нет
-            if success:
-                logger.info(f"{self.http_client.user} защита Cloudflare отсутствует или уже обойдена")
-                return True, response
-                
-            # Если запрос вернул HTML с Cloudflare, решаем капчу
-            logger.info(f"{self.http_client.user} обнаружена защита Cloudflare, начинаю решение капчи")
             
             # Решаем капчу
-            cf_clearance = await self.recaptcha_handle(html=response)
+            cf_clearance = await self.recaptcha_handle(html=html)
             
             if cf_clearance:
                 # Добавляем токен в cookies
                 self.http_client.cookies['cf_clearance'] = cf_clearance
                 
                 # Повторяем запрос с токеном
-                logger.info(f"{self.http_client.user} повторный запрос с токеном cf_clearance")
-                
-                # Важно: cf_clearance привязан к User-Agent, поэтому используем тот же User-Agent
-
-                success, response = await self.http_client.request(url=url, method=method, data=data, json_data=json_data, headers=headers, allow_redirects=allow_redirects)
-                if success:
-                    logger.success(f"{self.http_client.user} защита Cloudflare успешно обойдена")
-                    return True, response
-                else:
-                    logger.error(f"{self.http_client.user} не удалось обойти защиту Cloudflare: {response}")
-                    return False, response
+                logger.success(f"{self.http_client.user} защита Cloudflare успешно обойдена")
+                return True
             else:
                 logger.error(f"{self.http_client.user} не удалось получить токен cf_clearance")
-                return False, response
+                return False
                     
             
         except Exception as e:
             logger.error(f"{self.http_client.user} ошибка при обработке Cloudflare защиты: {str(e)}")
-            return False, str(e)
+            return False

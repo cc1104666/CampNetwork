@@ -18,6 +18,10 @@ PROXY_FILE = os.path.join(FILES_DIR, 'proxy.txt')
 PRIVATE_FILE = os.path.join(FILES_DIR, 'private.txt')
 TWITTER_FILE = os.path.join(FILES_DIR, 'twitter.txt')
 
+# Добавляем пути к резервным файлам
+RESERVE_PROXY_FILE = os.path.join(FILES_DIR, 'reserve_proxy.txt')
+RESERVE_TWITTER_FILE = os.path.join(FILES_DIR, 'reserve_twitter.txt')
+
 SETTINGS_FILE = os.path.join(FILES_DIR, 'settings.json')
 ACTUAL_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 ACTUAL_FOLLOWS_TWITTER = [
@@ -49,4 +53,3 @@ ERRORS_FILE = os.path.join(FILES_DIR, 'errors.log')
 
 logger.add(ERRORS_FILE, level='ERROR')
 logger.add(LOG_FILE, level='INFO')
-

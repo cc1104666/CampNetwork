@@ -16,7 +16,9 @@ class DB:
             public_key=public_key,
             proxy=proxy,
             user_agent=user_agent,
-            twitter_token=twitter_token
+            twitter_token=twitter_token,
+            proxy_status="OK",
+            twitter_status="OK"
         )
         try:
             self.session.add(wallet)
@@ -43,8 +45,32 @@ class DB:
         user = await self.session.get(User, user_id)
         if user:
             user.proxy = new_proxy
+            user.proxy_status = "OK"  # Сбрасываем статус при обновлении
             await self.session.commit()
             return new_proxy
+        else:
+            raise ValueError(f"Пользователь с id {user_id} не найден")
+    
+    async def update_twitter_token(self, user_id: int, available_tokens: list):
+        """Обновляет токен Twitter для пользователя"""
+        existing_tokens = await self.session.execute(select(User.twitter_token))
+        existing_tokens = {token[0] for token in existing_tokens.all() if token[0]}  # Преобразуем в множество
+
+        # Фильтруем список, оставляя только уникальные токены
+        unique_tokens = list(set(available_tokens) - existing_tokens)
+        if not unique_tokens:
+            raise ValueError("Нет доступных уникальных токенов Twitter!")
+
+        # Выбираем случайный уникальный токен
+        new_token = random.choice(unique_tokens)
+
+        # Обновляем токен для пользователя
+        user = await self.session.get(User, user_id)
+        if user:
+            user.twitter_token = new_token
+            user.twitter_status = "OK"  # Сбрасываем статус при обновлении
+            await self.session.commit()
+            return new_token
         else:
             raise ValueError(f"Пользователь с id {user_id} не найден")
 
@@ -132,4 +158,132 @@ class DB:
             
         except Exception as e:
             return []
-
+            
+    # --- Добавляем новые функции для управления ресурсами ---
+    
+    async def mark_proxy_as_bad(self, user_id: int) -> bool:
+        """
+        Отмечает прокси пользователя как плохое
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            user = await self.session.get(User, user_id)
+            if not user:
+                return False
+                
+            user.proxy_status = "BAD"
+            await self.session.commit()
+            return True
+        except Exception as e:
+            return False
+    
+    async def mark_twitter_as_bad(self, user_id: int) -> bool:
+        """
+        Отмечает токен Twitter пользователя как плохой
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            user = await self.session.get(User, user_id)
+            if not user:
+                return False
+                
+            user.twitter_status = "BAD"
+            await self.session.commit()
+            return True
+        except Exception as e:
+            return False
+    
+    async def get_wallets_with_bad_proxy(self) -> list:
+        """
+        Получает список кошельков с плохими прокси
+        
+        Returns:
+            Список кошельков
+        """
+        query = select(User).where(User.proxy_status == "BAD")
+        result = await self.session.execute(query)
+        return result.scalars().all()
+    
+    async def get_wallets_with_bad_twitter(self) -> list:
+        """
+        Получает список кошельков с плохими токенами Twitter
+        
+        Returns:
+            Список кошельков
+        """
+        query = select(User).where(User.twitter_status == "BAD")
+        result = await self.session.execute(query)
+        return result.scalars().all()
+    
+    async def get_bad_resources_count(self) -> tuple:
+        """
+        Получает количество плохих ресурсов
+        
+        Returns:
+            (bad_proxies, bad_twitter): Количество плохих ресурсов
+        """
+        bad_proxies_query = select(User).where(User.proxy_status == "BAD")
+        bad_proxies_result = await self.session.execute(bad_proxies_query)
+        bad_proxies = len(bad_proxies_result.scalars().all())
+        
+        bad_twitter_query = select(User).where(User.twitter_status == "BAD")
+        bad_twitter_result = await self.session.execute(bad_twitter_query)
+        bad_twitter = len(bad_twitter_result.scalars().all())
+        
+        return bad_proxies, bad_twitter
+    
+    async def replace_bad_proxy(self, user_id: int, new_proxy: str) -> bool:
+        """
+        Заменяет плохое прокси пользователя
+        
+        Args:
+            user_id: ID пользователя
+            new_proxy: Новое прокси
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            user = await self.session.get(User, user_id)
+            if not user:
+                return False
+                
+            user.proxy = parse_proxy(new_proxy)
+            user.proxy_status = "OK"
+            await self.session.commit()
+            return True
+        except Exception as e:
+            return False
+    
+    async def replace_bad_twitter(self, user_id: int, new_token: str) -> bool:
+        """
+        Заменяет плохой токен Twitter пользователя
+        
+        Args:
+            user_id: ID пользователя
+            new_token: Новый токен Twitter
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            user = await self.session.get(User, user_id)
+            if not user:
+                return False
+                
+            user.twitter_token = new_token
+            user.twitter_status = "OK"
+            await self.session.commit()
+            return True
+        except Exception as e:
+            return False
