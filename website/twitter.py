@@ -1,7 +1,4 @@
 import asyncio
-import jwt
-import string
-import time
 import random
 from typing import Dict, List, Optional, Union, Any
 from loguru import logger
@@ -11,23 +8,43 @@ from utils.db_api_async.models import User
 from utils.db_api_async.db_api import Session
 from utils.db_api_async.db_activity import DB
 from website.http_client import BaseHttpClient
-from website.camp_client import CampNetworkClient
-from data.config import CAPMONSTER_API_KEY
+from data.config import CAPMONSTER_API_KEY, ACTUAL_UA
 from data.models import Settings
 
 
 class TwitterClient(BaseHttpClient):
-    """Клиент для взаимодействия с Twitter через tweepy-self"""
+    """Клиент для взаимодействия с Twitter API"""
 
-    # URL для запросов на выполнение квестов с Twitter
+    # URLs для запросов
     BASE_URL = "https://loyalty.campnetwork.xyz"
     TWITTER_CONNECT_URL = f"{BASE_URL}/api/loyalty/social/connect/twitter"
     TWITTER_VERIFY_URL = f"{BASE_URL}/api/loyalty/social/verify/twitter"
 
-    # ID квестов, связанных с Twitter
-    TWITTER_QUEST_IDS = {
-        # Add Twitter-related quest IDs from QUEST_IDS dictionary
-        # For example: "TwitterFollow": "quest-id-from-quest-client"
+    # Маппинг Twitter-аккаунтов к ID заданий
+    TWITTER_QUESTS_MAP = {
+        "Follow": {
+            "StoryChain_ai": "4cebe3ff-4dae-4858-9323-8b669d80e45c",
+            "tokentails": "cf5a23b1-d48c-4ab9-a74c-785394158224",
+            "PanenkaFC90": "040ead29-7436-4457-b7cd-8bd2a8855a49",
+            "ScorePlay_xyz": "5f03c7d8-8ee0-443f-a0ad-8fda68dfecd8",
+            "wideworlds_ai": "42936f26-3ec6-401f-8ed0-62af343f1fc4",
+            "pets_ww": "242ab4dc-2df4-4b97-bcd7-b013ff6635a1",
+            "chronicle_ww": "e47be0b8-eedc-445e-a53e-b2f05daabe3c",
+            "PictographsNFT": "4e467350-a49b-4413-8fce-4d424d3303bb",
+            "entertainm_io": "beb6df6d-b225-46e5-8a4f-20ad967fb4a8",
+            "bleetz_io": "01bc9433-359f-4403-9bc8-4295d47dc3c8",
+            "RewardedTV_": "87c040a3-060a-4000-b271-051603417e8b",
+            "Fantasy_cristal": "17681189-fd69-4aa3-b533-8f452c1bab0c",
+            "belgranofantasy": "1cdb82f7-7878-46fc-baec-b75d6e414a25",
+            "awanalab": "1a81cbe5-a792-4921-baa0-0c36165e0d7c",
+            "arcoin_official": "b852ec9b-7af5-4f07-a677-1bc630bf4579",
+            "TheMetakraft": "39b41034-ce80-4057-8cca-e95992182f04",
+            "summitx_finance": "12b177a5-aa4e-47c6-aaa9-b14bf9481d0a",
+            "thepixudi": "009c0d38-dc3c-4d37-b558-38ece673724a",
+            "clustersxyz": "c7d0e2c8-87e7-46df-81f3-48f311735c22",
+            "JukebloxDapp": "02e3d5b3-e65e-41c8-b159-405f48255cdf",
+            "campnetworkxyz": "2660f24a-e3ac-4093-8c16-7ae718c00731",
+        }
     }
 
     def __init__(self, user: User, auth_client, twitter_auth_token: str, twitter_username: str | None = None, 
@@ -68,34 +85,9 @@ class TwitterClient(BaseHttpClient):
         if user.proxy:
             self.client_config["proxy"] = user.proxy
             
-        # Статус соединения Twitter с CampNetwork
-        self.is_connected = False
+        # Инициализируем клиент как None
         self.twitter_client = None
-        self.TWITTER_QUESTS_MAP = {
-                "Follow": {
-                    "StoryChain_ai": "4cebe3ff-4dae-4858-9323-8b669d80e45c",
-                    "tokentails": "cf5a23b1-d48c-4ab9-a74c-785394158224",
-                    "PanenkaFC90": "040ead29-7436-4457-b7cd-8bd2a8855a49",
-                    "ScorePlay_xyz": "5f03c7d8-8ee0-443f-a0ad-8fda68dfecd8",
-                    "wideworlds_ai": "42936f26-3ec6-401f-8ed0-62af343f1fc4",
-                    "pets_ww": "242ab4dc-2df4-4b97-bcd7-b013ff6635a1",
-                    "chronicle_ww": "e47be0b8-eedc-445e-a53e-b2f05daabe3c",
-                    "PictographsNFT": "4e467350-a49b-4413-8fce-4d424d3303bb",
-                    "entertainm_io": "beb6df6d-b225-46e5-8a4f-20ad967fb4a8",
-                    "bleetz_io": "01bc9433-359f-4403-9bc8-4295d47dc3c8",
-                    "RewardedTV_": "87c040a3-060a-4000-b271-051603417e8b",
-                    "Fantasy_cristal": "17681189-fd69-4aa3-b533-8f452c1bab0c",
-                    "belgranofantasy": "1cdb82f7-7878-46fc-baec-b75d6e414a25",
-                    "awanalab": "1a81cbe5-a792-4921-baa0-0c36165e0d7c",
-                    "arcoin_official": "b852ec9b-7af5-4f07-a677-1bc630bf4579",
-                    "TheMetakraft": "39b41034-ce80-4057-8cca-e95992182f04",
-                    "summitx_finance": "12b177a5-aa4e-47c6-aaa9-b14bf9481d0a",
-                    "thepixudi": "009c0d38-dc3c-4d37-b558-38ece673724a",
-                    "clustersxyz": "c7d0e2c8-87e7-46df-81f3-48f311735c22",
-                    "JukebloxDapp": "02e3d5b3-e65e-41c8-b159-405f48255cdf",
-                    "campnetworkxyz": "2660f24a-e3ac-4093-8c16-7ae718c00731",
-                }
-            }
+        self.is_connected = False
 
     async def initialize(self) -> bool:
         """
@@ -115,7 +107,7 @@ class TwitterClient(BaseHttpClient):
             await self.twitter_client.establish_status()
             
             if self.twitter_account.status == twitter.AccountStatus.GOOD:
-                logger.success(f"{self.user} успешно инициализирован Twitter клиент @{self.twitter_account.username}")
+                logger.success(f"{self.user} Twitter клиент инициализирован")
                 return True
             else:
                 logger.error(f"{self.user} проблема со статусом Twitter аккаунта: {self.twitter_account.status}")
@@ -131,6 +123,7 @@ class TwitterClient(BaseHttpClient):
             try:
                 await self.twitter_client.__aexit__(None, None, None)
                 self.twitter_client = None
+                logger.info(f"{self.user} Twitter клиент закрыт")
             except Exception as e:
                 logger.error(f"{self.user} ошибка при закрытии Twitter клиента: {str(e)}")
     
@@ -177,15 +170,13 @@ class TwitterClient(BaseHttpClient):
                 url="https://loyalty.campnetwork.xyz/api/twitter/auth",
                 method="GET",
                 headers=headers,
-                allow_redirects=False  # Добавим этот параметр в метод request
+                allow_redirects=False
             )
             
             # Проверяем, получили ли мы ответ с редиректом
-            # auth_response может быть либо словарем заголовков, либо содержимым ответа
             if 'Location' in auth_response:
                 # Извлекаем URL из Location header
                 twitter_auth_url = auth_response['Location']
-                logger.info(f"{self.user} получен URL авторизации Twitter: {twitter_auth_url}")
                 
                 # Парсим URL для извлечения параметров
                 import urllib.parse
@@ -199,10 +190,8 @@ class TwitterClient(BaseHttpClient):
                 redirect_uri = query_params.get('redirect_uri', ['https://snag-render.com/api/twitter/auth/callback'])[0]
                 
                 if not state or not code_challenge:
-                    logger.error(f"{self.user} не удалось извлечь необходимые параметры из URL авторизации")
+                    logger.error(f"{self.user} не удалось извлечь параметры из URL авторизации")
                     return False
-                    
-                logger.info(f"{self.user} извлечены параметры: state={state[:20]}..., code_challenge={code_challenge}")
                 
                 # Шаг 2: Используем параметры для OAuth2 авторизации Twitter
                 oauth2_data = {
@@ -215,24 +204,18 @@ class TwitterClient(BaseHttpClient):
                     'code_challenge_method': 'plain'
                 }
                 
-                logger.info(f"{self.user} выполняю OAuth2 запрос к Twitter")
-                
                 # Выполняем OAuth2 авторизацию
                 auth_code = await self.twitter_client.oauth2(**oauth2_data)
                 
                 if not auth_code:
                     logger.error(f"{self.user} не удалось получить код авторизации от Twitter")
                     return False
-                    
-                logger.success(f"{self.user} успешно получен код авторизации: {auth_code}")
                 
                 # Шаг 3: Делаем запрос на callback URL
-                # Для этого шага используем обычный HTTP клиент, так как нам не нужно сохранять состояние
                 callback_url = f"{redirect_uri}?state={state}&code={auth_code}"
-                logger.info(f"{self.user} выполняю запрос на callback URL: {callback_url}")
                 
                 callback_headers = {
-                    'User-Agent': self.user.user_agent,
+                    'User-Agent': ACTUAL_UA,
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Referer': 'https://x.com/',
                     'Upgrade-Insecure-Requests': '1',
@@ -241,7 +224,7 @@ class TwitterClient(BaseHttpClient):
                     'Sec-Fetch-Site': 'cross-site',
                 }
                 
-                # Используем метод запроса из BaseHttpClient, так как мы уже наследуемся от него
+                # Используем метод запроса из BaseHttpClient
                 callback_success, callback_response = await self.request(
                     url=callback_url,
                     method="GET",
@@ -252,10 +235,8 @@ class TwitterClient(BaseHttpClient):
                 # Проверяем, получили ли мы редирект на connect URL
                 if not callback_success and isinstance(callback_response, dict) and 'Location' in callback_response:
                     connect_url = callback_response['Location']
-                    logger.info(f"{self.user} выполняю запрос на подключение Twitter: {connect_url}")
                     
                     # Шаг 4: Выполняем запрос на подключение Twitter
-                    # Важно: используем auth_client для этого запроса, чтобы использовать его куки и сессию
                     connect_headers = await self.auth_client.get_headers({
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Language': 'en-US,en;q=0.5',
@@ -271,46 +252,43 @@ class TwitterClient(BaseHttpClient):
                         'Priority': 'u=0, i',
                     })
                     
-                    # Используем auth_client.request для запроса, чтобы использовать его куки
-
+                    # Используем auth_client.request для запроса
                     connect_success, connect_response = await self.auth_client.request(
                         url=connect_url,
                         method="GET",
                         headers=connect_headers,
-                        allow_redirects=False  # Следуем за всеми редиректами
+                        allow_redirects=False
                     )
                     
                     # Проверяем результат подключения
-                    # В этом случае, success может быть True, если мы получили 200 после всех редиректов
                     if connect_success:
-                        logger.success(f"{self.user} успешно подключил Twitter к CampNetwork")
+                        logger.success(f"{self.user} Twitter подключен")
+                        self.is_connected = True
                         return True
                     else:
                         # Проверяем, получили ли мы редирект на основную страницу
                         if isinstance(connect_response, dict) and 'Location' in connect_response and 'loyalty.campnetwork.xyz/loyalty' in connect_response['Location']:
-                            logger.success(f"{self.user} успешно подключил Twitter к CampNetwork (редирект на loyalty)")
+                            logger.success(f"{self.user} Twitter подключен (через редирект)")
+                            self.is_connected = True
                             return True
                         
-                        logger.error(f"{self.user} ошибка при подключении Twitter: {connect_response}")
+                        logger.error(f"{self.user} ошибка при подключении Twitter")
                         return False
                 else:
-                    logger.error(f"{self.user} не получен ожидаемый редирект от callback URL: {callback_response}")
+                    logger.error(f"{self.user} не получен ожидаемый редирект от callback URL")
                     return False
             else:
-                logger.error(f"{self.user} не удалось получить редирект на авторизацию Twitter: {auth_response}")
+                logger.error(f"{self.user} не удалось получить редирект на авторизацию Twitter")
                 return False
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при подключении Twitter к CampNetwork: {str(e)}")
+            logger.error(f"{self.user} ошибка при подключении Twitter: {str(e)}")
             return False
 
-    async def check_twitter_connection_status(self,) -> bool:
+    async def check_twitter_connection_status(self) -> bool:
         """
         Проверяет, подключен ли Twitter к аккаунту CampNetwork
         
-        Args:
-            wallet_address: Адрес кошелька
-            
         Returns:
             True если Twitter подключен, False в противном случае
         """
@@ -350,13 +328,16 @@ class TwitterClient(BaseHttpClient):
                         
                         if twitter_user and twitter_verified_at:
                             logger.success(f"{self.user} Twitter уже подключен (@{twitter_user})")
+                            self.is_connected = True
                             return True
             
-            logger.info(f"{self.user} Twitter не подключен к аккаунту")
+            logger.info(f"{self.user} Twitter не подключен")
+            self.is_connected = False
             return False
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при проверке статуса подключения Twitter: {str(e)}")
+            logger.error(f"{self.user} ошибка при проверке статуса Twitter: {str(e)}")
+            self.is_connected = False
             return False
     
     async def follow_account(self, account_name: str) -> bool:
@@ -388,7 +369,7 @@ class TwitterClient(BaseHttpClient):
             is_followed = await self.twitter_client.follow(user.id)
             
             if is_followed:
-                logger.success(f"{self.user} успешно подписался на @{clean_account_name}")
+                logger.success(f"{self.user} подписался на @{clean_account_name}")
                 return True
             else:
                 logger.warning(f"{self.user} не удалось подписаться на @{clean_account_name}")
@@ -398,108 +379,6 @@ class TwitterClient(BaseHttpClient):
             logger.error(f"{self.user} ошибка при подписке на @{account_name}: {str(e)}")
             return False
     
-
-    async def complete_twitter_follow_quests(self, target_accounts: List[str]) -> Dict[str, bool]:
-        """
-        Выполняет задания подписки на указанные аккаунты
-        
-        Args:
-            target_accounts: Список аккаунтов для подписки
-            
-        Returns:
-            Результаты выполнения заданий {аккаунт: успех}
-        """
-        results = {}
-        
-        for account in target_accounts:
-            # Получаем ID задания для этого аккаунта
-            quest_id = self.TWITTER_QUESTS_MAP.get("Follow", {}).get(account)
-            if not quest_id:
-                logger.warning(f"{self.user} нет ID задания для подписки на {account}")
-                results[account] = False
-                continue
-                
-            # Проверяем, выполнено ли уже задание
-            is_completed = False
-            try:
-                async with Session() as session:
-                    db = DB(session=session)
-                    is_completed = await db.is_quest_completed(self.user.id, quest_id)
-            except Exception as e:
-                logger.error(f"{self.user} ошибка при проверке статуса задания: {str(e)}")
-                
-            if is_completed:
-                logger.info(f"{self.user} задание подписки на {account} уже выполнено")
-                results[account] = True
-                continue
-                
-            # Выполняем подписку
-            follow_success = await self.follow_account(account)
-            if not follow_success:
-                logger.error(f"{self.user} не удалось подписаться на {account}")
-                results[account] = False
-                continue
-                
-            settings = Settings()
-            min_quest_delay, max_quest_delay = settings.get_twitter_quest_delay()
-            random_sleep = random.uniform(min_quest_delay, max_quest_delay)
-            # Отправляем запрос на выполнение задания
-            complete_url = f"{self.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
-            
-            headers = await self.auth_client.get_headers({
-                'Content-Type': 'application/json',
-                'Origin': 'https://loyalty.campnetwork.xyz',
-            })
-            
-            success, response = await self.auth_client.request(
-                url=complete_url,
-                method="POST",
-                json_data={},
-                headers=headers
-            )
-            
-            if success:
-                logger.success(f"{self.user} успешно выполнил задание подписки на {account}")
-                
-                # Отмечаем задание как выполненное в БД
-                try:
-                    async with Session() as session:
-                        db = DB(session=session)
-                        await db.mark_quest_completed(self.user.id, quest_id)
-                        results[account] = True
-                    await asyncio.sleep(random_sleep)
-                except Exception as e:
-                    logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
-                    results[account] = False
-                    logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
-                    await asyncio.sleep(random_sleep)
-
-            else:
-                # Проверка на "You have already been rewarded"
-                if isinstance(response, dict) and response.get("message") == "You have already been rewarded" and response.get("rewarded") is True:
-                    logger.info(f"{self.user} задание подписки на {account} уже выполнено ранее")
-                    
-                    # Отмечаем задание как выполненное в БД
-                    try:
-                        async with Session() as session:
-                            db = DB(session=session)
-                            await db.mark_quest_completed(self.user.id, quest_id)
-                        results[account] = True
-                        logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
-                        await asyncio.sleep(random_sleep)
-                    except Exception as e:
-                        logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
-                        results[account] = False
-                        logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
-                        await asyncio.sleep(random_sleep)
-                else:
-                    logger.error(f"{self.user} ошибка при выполнении задания подписки на {account}: {response}")
-                    results[account] = False
-                    logger.info(f"{self.user} рандомно сплю перед новой подпиской {random_sleep}")
-                    await asyncio.sleep(random_sleep)
-                    
-        return results
-        
     async def post_tweet(self, text: str) -> Optional[Any]:
         """
         Публикует твит с указанным текстом
@@ -519,7 +398,7 @@ class TwitterClient(BaseHttpClient):
             tweet = await self.twitter_client.tweet(text)
             
             if tweet:
-                logger.success(f"{self.user} успешно опубликовал твит: {text[:30]}... (ID: {tweet.id})")
+                logger.success(f"{self.user} опубликован твит (ID: {tweet.id})")
                 return tweet
             else:
                 logger.warning(f"{self.user} не удалось опубликовать твит")
@@ -548,14 +427,14 @@ class TwitterClient(BaseHttpClient):
             retweet_id = await self.twitter_client.repost(tweet_id)
             
             if retweet_id:
-                logger.success(f"{self.user} успешно сделал ретвит твита {tweet_id}")
+                logger.success(f"{self.user} ретвит выполнен")
                 return True
             else:
-                logger.warning(f"{self.user} не удалось сделать ретвит твита {tweet_id}")
+                logger.warning(f"{self.user} не удалось сделать ретвит")
                 return False
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при ретвите твита {tweet_id}: {str(e)}")
+            logger.error(f"{self.user} ошибка при ретвите: {str(e)}")
             return False
     
     async def like_tweet(self, tweet_id: int) -> bool:
@@ -577,84 +456,80 @@ class TwitterClient(BaseHttpClient):
             is_liked = await self.twitter_client.like(tweet_id)
             
             if is_liked:
-                logger.success(f"{self.user} успешно поставил лайк твиту {tweet_id}")
+                logger.success(f"{self.user} лайк выполнен")
                 return True
             else:
-                logger.warning(f"{self.user} не удалось поставить лайк твиту {tweet_id}")
+                logger.warning(f"{self.user} не удалось поставить лайк")
                 return False
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при лайке твита {tweet_id}: {str(e)}")
+            logger.error(f"{self.user} ошибка при лайке: {str(e)}")
             return False
     
-    async def complete_twitter_quest(self, quest_name: str, target_accounts: List[str] | None = None, 
-                                     tweet_text: str | None = None, tweet_id_to_like: int | None = None, 
-                                     tweet_id_to_retweet: int | None = None) -> bool:
+    async def complete_follow_quest(self, account_name: str) -> bool:
         """
-        Выполняет задание Twitter по его названию
+        Выполняет задание подписки на аккаунт и отмечает его как выполненное в CampNetwork
         
         Args:
-            quest_name: Название задания
-            target_accounts: Список аккаунтов для подписки
-            tweet_text: Текст твита для публикации
-            tweet_id_to_like: ID твита для лайка
-            tweet_id_to_retweet: ID твита для ретвита
+            account_name: Имя аккаунта для подписки
             
         Returns:
             Статус успеха
         """
-        if not self.twitter_client:
-            logger.error(f"{self.user} попытка выполнить задание без инициализации клиента")
+        # Получаем ID задания для этого аккаунта
+        quest_id = self.TWITTER_QUESTS_MAP.get("Follow", {}).get(account_name)
+        if not quest_id:
+            logger.warning(f"{self.user} нет ID задания для подписки на {account_name}")
             return False
-            
+        
+        # Проверяем, выполнено ли уже задание
         try:
-            # Выполняем действия в зависимости от задания
-            quest_success = False
+            async with Session() as session:
+                db = DB(session=session)
+                if await db.is_quest_completed(self.user.id, quest_id):
+                    logger.info(f"{self.user} задание подписки на {account_name} уже выполнено")
+                    return True
+        except Exception as e:
+            logger.error(f"{self.user} ошибка при проверке задания: {str(e)}")
+        
+        # Выполняем подписку
+        follow_success = await self.follow_account(account_name)
+        if not follow_success:
+            logger.error(f"{self.user} не удалось подписаться на {account_name}")
+            return False
+        
+        # Отправляем запрос на выполнение задания
+        try:
+            complete_url = f"{self.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
             
-            # Задание на подписку
-            if "Follow" in quest_name and target_accounts:
-                follow_results = await self.complete_twitter_follow_quests(target_accounts)
-                quest_success = any(follow_results.values())
+            headers = await self.auth_client.get_headers({
+                'Content-Type': 'application/json',
+                'Origin': 'https://loyalty.campnetwork.xyz',
+            })
             
-            # Задание на публикацию твита
-            elif "Tweet" in quest_name and tweet_text:
-                tweet = await self.post_tweet(tweet_text)
-                quest_success = tweet is not None
+            success, response = await self.auth_client.request(
+                url=complete_url,
+                method="POST",
+                json_data={},
+                headers=headers
+            )
             
-            # Задание на лайк
-            elif "Like" in quest_name and tweet_id_to_like:
-                quest_success = await self.like_tweet(tweet_id_to_like)
-            
-            # Задание на ретвит
-            elif "Retweet" in quest_name and tweet_id_to_retweet:
-                quest_success = await self.retweet(tweet_id_to_retweet)
-            
-            # После выполнения действий в Twitter, отправляем запрос на сервер CampNetwork
-            if quest_success:
-                # Получаем ID задания
-                quest_id = self.TWITTER_QUEST_IDS.get(quest_name)
-                if not quest_id:
-                    logger.error(f"{self.user} задание {quest_name} не найдено в списке")
-                    return False
+            if success:
+                logger.success(f"{self.user} успешно выполнено задание подписки на {account_name}")
                 
-                # Формируем URL для запроса на выполнение задания
-                complete_url = f"{self.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
+                # Отмечаем задание как выполненное в БД
+                try:
+                    async with Session() as session:
+                        db = DB(session=session)
+                        await db.mark_quest_completed(self.user.id, quest_id)
+                except Exception as e:
+                    logger.error(f"{self.user} ошибка сохранения статуса: {e}")
                 
-                headers = await self.get_headers({
-                    'Content-Type': 'application/json',
-                    'Origin': 'https://loyalty.campnetwork.xyz',
-                })
-                
-                # Отправляем запрос на выполнение задания
-                success, response = await self.request(
-                    url=complete_url,
-                    method="POST",
-                    json_data={},  # Пустой JSON как в quest_client
-                    headers=headers
-                )
-                
-                if success:
-                    logger.success(f"{self.user} успешно выполнил Twitter задание {quest_name}")
+                return True
+            else:
+                # Проверка на "You have already been rewarded"
+                if isinstance(response, dict) and response.get("message") == "You have already been rewarded" and response.get("rewarded") is True:
+                    logger.info(f"{self.user} задание подписки на {account_name} уже выполнено ранее")
                     
                     # Отмечаем задание как выполненное в БД
                     try:
@@ -662,248 +537,154 @@ class TwitterClient(BaseHttpClient):
                             db = DB(session=session)
                             await db.mark_quest_completed(self.user.id, quest_id)
                     except Exception as e:
-                        logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
+                        logger.error(f"{self.user} ошибка сохранения статуса: {e}")
                     
                     return True
-                
                 else:
-                    # Проверка на "You have already been rewarded"
-                    if isinstance(response, dict) and response.get("message") == "You have already been rewarded" and response.get("rewarded") is True:
-                        logger.info(f"{self.user} задание {quest_name} уже выполнено ранее")
-                        
-                        # Отмечаем задание как выполненное в БД
-                        try:
-                            async with Session() as session:
-                                db = DB(session=session)
-                                await db.mark_quest_completed(self.user.id, quest_id)
-                        except Exception as e:
-                            logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
-                        
-                        return True
-                    else:
-                        logger.error(f"{self.user} ошибка при выполнении задания {quest_name}: {response}")
-                        return False
-            
-            else:
-                logger.error(f"{self.user} не удалось выполнить действия в Twitter для задания {quest_name}")
-                return False
-                
+                    logger.error(f"{self.user} ошибка выполнения задания подписки на {account_name}")
+                    return False
         except Exception as e:
-            logger.error(f"{self.user} ошибка при выполнении Twitter задания {quest_name}: {str(e)}")
+            logger.error(f"{self.user} ошибка при отправке запроса: {str(e)}")
             return False
 
-
-class TwitterQuestManager:
-    """Менеджер заданий Twitter для CampNetwork"""
-
-    # Список аккаунтов для подписки по умолчанию
-    DEFAULT_FOLLOW_ACCOUNTS = [
-        "StoryChain_ai",
-        "tokentails",
-        "PanenkaFC90",
-        "ScorePlay_xyz",
-        "wideworlds_ai",
-        "pets_ww",
-        "chronicle_ww",
-        "PictographsNFT",
-        "entertainm_io",
-        "bleetz_io",
-        "RewardedTV_",
-        "Fantasy_cristal",
-        "belgranofantasy",
-        "awanalab",
-        "arcoin_official",
-        "TheMetakraft",
-        "summitx_finance",
-        "thepixudi",
-        "clustersxyz",
-        "JukebloxDapp",
-        "campnetworkxyz",
-    ]
-    
-    # Шаблоны твитов по умолчанию
-    DEFAULT_TWEET_TEMPLATES = [
-        "Just discovered @CampNetwork! Amazing platform for web3 enthusiasts. #CampNetwork #Web3",
-        "Excited to be part of the @CampNetwork community! #CampNetwork #Crypto",
-        "Checking out @CampNetwork - a game-changer in the web3 space. #CampNetwork #Blockchain"
-    ]
-    
-    # ID и URL для твитов, которые нужно лайкнуть/ретвитнуть по умолчанию
-    DEFAULT_TWEETS_TO_LIKE = [
-        1234567890123456789, # Замените на реальный ID твита
-    ]
-    
-    DEFAULT_TWEETS_TO_RETWEET = [
-        1231,
-    ]
-    
-    def __init__(self, user: User, auth_client, twitter_auth_token: str, twitter_username: str | None = None, 
-                 twitter_password: str | None = None, totp_secret: str | None = None, capsolver_api_key: str | None = None):
+    async def complete_follow_quests(self, account_names: List[str]) -> Dict[str, bool]:
         """
-        Инициализация менеджера заданий Twitter
+        Выполняет задания подписки на несколько аккаунтов
         
         Args:
-            user: Объект пользователя
-            twitter_auth_token: Токен авторизации Twitter
-            twitter_username: Имя пользователя Twitter
-            twitter_password: Пароль Twitter
-            totp_secret: Секрет TOTP (если включена 2FA)
-            capsolver_api_key: API ключ для сервиса CapSolver
-        """
-        self.user = user
-        self.twitter_auth_token = twitter_auth_token
-        self.twitter_username = twitter_username
-        self.twitter_password = twitter_password
-        self.totp_secret = totp_secret
-        self.capsolver_api_key = capsolver_api_key
-        self.auth_client = auth_client
-        
-
-    async def ensure_authorized(self) -> tuple:
-        """
-        Проверяет авторизацию на сайте CampNetwork и выполняет её при необходимости
-        
-        Returns:
-            (success, auth_client): Статус успеха и авторизованный клиент
-        """
-        try:
-            # Создаем клиент CampNetwork для авторизации
-            camp_client = CampNetworkClient(user=self.user)
-            
-            # Выполняем авторизацию
-            logger.info(f"{self.user} выполняю авторизацию на CampNetwork")
-            auth_success = await camp_client.login()
-            
-            if not auth_success:
-                logger.error(f"{self.user} не удалось авторизоваться на CampNetwork")
-                return False, None
-                
-            logger.success(f"{self.user} успешно авторизован на CampNetwork")
-            return True, camp_client.auth_client
-            
-        except Exception as e:
-            logger.error(f"{self.user} ошибка при авторизации на CampNetwork: {str(e)}")
-            return False, None
-
-    async def complete_twitter_quests(self, custom_follow_accounts: List[str] | None = None, 
-                                     custom_tweet_text: str | None = None, 
-                                     custom_tweet_to_like: int | None = None,
-                                     custom_tweet_to_retweet: int | None = None) -> bool:
-        """
-        Выполняет все задания Twitter
-        
-        Args:
-            custom_follow_accounts: Кастомный список аккаунтов для подписки
-            custom_tweet_text: Кастомный текст твита
-            custom_tweet_to_like: Кастомный ID твита для лайка
-            custom_tweet_to_retweet: Кастомный ID твита для ретвита
+            account_names: Список аккаунтов для подписки
             
         Returns:
-            Результаты выполнения заданий
+            Словарь с результатами {аккаунт: успех}
         """
-
+        settings = Settings()
+        action_min_delay, action_max_delay = settings.get_twitter_action_delay()
+        quest_min_delay, quest_max_delay = settings.get_twitter_quest_delay()
+        
         results = {}
         
-        # Получаем настройки задержек
+        # Перемешиваем аккаунты для случайного порядка
+        random_accounts = account_names.copy()
+        random.shuffle(random_accounts)
+        
+        for account in random_accounts:
+            # Выполняем задание подписки
+            success = await self.complete_follow_quest(account)
+            results[account] = success
+            
+            # Задержка между заданиями
+            if account != random_accounts[-1]:  # Если это не последний аккаунт
+                delay = random.uniform(quest_min_delay, quest_max_delay)
+                logger.info(f"{self.user} задержка {int(delay)} сек. перед следующей подпиской")
+                await asyncio.sleep(delay)
+        
+        return results
+
+    async def complete_twitter_quests(self, follow_accounts: List[str] | None = None,
+                                     tweet_text: str | None = None,
+                                     tweet_id_to_like: int | None = None,
+                                     tweet_id_to_retweet: int | None = None) -> bool:
+        """
+        Выполняет Twitter задания
+        
+        Args:
+            follow_accounts: Список аккаунтов для подписки
+            tweet_text: Текст твита для публикации
+            tweet_id_to_like: ID твита для лайка
+            tweet_id_to_retweet: ID твита для ретвита
+            
+        Returns:
+            Статус успеха
+        """
         settings = Settings()
-        min_quest_delay, max_quest_delay = settings.get_twitter_quest_delay()
+        min_delay, max_delay = settings.get_twitter_quest_delay()
         
-        # Определяем данные для заданий
-        follow_accounts = custom_follow_accounts or self.DEFAULT_FOLLOW_ACCOUNTS
-        
-        # Выбираем случайный шаблон твита, если не указан кастомный
-        if not custom_tweet_text and self.DEFAULT_TWEET_TEMPLATES:
-            tweet_text = random.choice(self.DEFAULT_TWEET_TEMPLATES)
-        else:
-            tweet_text = custom_tweet_text
-            
-        # Выбираем случайный твит для лайка, если не указан кастомный
-        if not custom_tweet_to_like and self.DEFAULT_TWEETS_TO_LIKE:
-            tweet_to_like = random.choice(self.DEFAULT_TWEETS_TO_LIKE)
-        else:
-            tweet_to_like = custom_tweet_to_like
-            
-        # Выбираем случайный твит для ретвита, если не указан кастомный
-        if not custom_tweet_to_retweet and self.DEFAULT_TWEETS_TO_RETWEET:
-            tweet_to_retweet = random.choice(self.DEFAULT_TWEETS_TO_RETWEET)
-        else:
-            tweet_to_retweet = custom_tweet_to_retweet
+        success_count = 0
+        total_tasks = 0
         
         try:
-            auth_success, auth_client = await self.ensure_authorized()
-            logger.info(f"{self.user} начинаем выполнение Twitter заданий")
-            if not auth_success or not auth_client:
-                logger.error(f"{self.user} невозможно выполнить Twitter задания без авторизации")
+            # Инициализируем клиент
+            if not await self.initialize():
+                logger.error(f"{self.user} не удалось инициализировать Twitter клиент")
                 return False
-            # Создаем клиент Twitter
-            async with TwitterClient(
-                user=self.user,
-                auth_client=auth_client,
-                twitter_auth_token=self.twitter_auth_token,
-                twitter_username=self.twitter_username,
-                twitter_password=self.twitter_password,
-                totp_secret=self.totp_secret,
-            ) as twitter_client:
-                
-                # Проверяем, инициализирован ли клиент
-                if not twitter_client.twitter_client:
-                    logger.error(f"{self.user} не удалось инициализировать Twitter клиент")
+            
+            # Проверяем подключение и подключаем Twitter при необходимости
+            if not self.is_connected and not await self.check_twitter_connection_status():
+                logger.info(f"{self.user} Twitter не подключен, выполняю подключение")
+                if not await self.connect_twitter_to_camp():
+                    logger.error(f"{self.user} не удалось подключить Twitter")
                     return False
-
-                if not twitter_client.is_connected:
-                    is_verified = await twitter_client.check_twitter_connection_status()
-                    if not is_verified:
-                        logger.info(f"{self.user} Twitter не подключен к CampNetwork, подключаем...")
-                        if not await twitter_client.connect_twitter_to_camp():
-                            logger.error(f"{self.user} не удалось подключить Twitter к CampNetwork")
-                            return False
-                # Выполняем задание подписки
-                if follow_accounts:
-                    follow_results = await twitter_client.complete_twitter_follow_quests(follow_accounts)
-                    results["TwitterFollow"] = any(follow_results.values())  # Успешно, если хотя бы одно задание выполнено
-
-                # if follow_accounts:
-                #     results["TwitterFollow"] = await twitter_client.complete_twitter_quest(
-                #         quest_name="TwitterFollow",
-                #         target_accounts=follow_accounts
-                #     )
-                #     
-                #     # Задержка между заданиями
-                #     await asyncio.sleep(random.uniform(min_quest_delay, max_quest_delay))
-                
-                # Выполняем задание публикации твита
-                if tweet_text:
-                    results["TwitterTweet"] = await twitter_client.complete_twitter_quest(
-                        quest_name="TwitterTweet",
-                        tweet_text=tweet_text
-                    )
-                    
-                    # Задержка между заданиями
-                    await asyncio.sleep(random.uniform(min_quest_delay, max_quest_delay))
-                
-                # Выполняем задание лайка
-                if tweet_to_like:
-                    results["TwitterLike"] = await twitter_client.complete_twitter_quest(
-                        quest_name="TwitterLike",
-                        tweet_id_to_like=tweet_to_like
-                    )
-                    
-                    # Задержка между заданиями
-                    await asyncio.sleep(random.uniform(min_quest_delay, max_quest_delay))
-                
-                # Выполняем задание ретвита
-                if tweet_to_retweet:
-                    results["TwitterRetweet"] = await twitter_client.complete_twitter_quest(
-                        quest_name="TwitterRetweet",
-                        tweet_id_to_retweet=tweet_to_retweet
-                    )
             
-            # Подсчитываем результаты
-            success_count = sum(1 for result in results.values() if result)
-            logger.success(f"{self.user} выполнено {success_count} из {len(results)} Twitter заданий")
+            # Выполняем задания в случайном порядке
+            task_types = []
             
-            return True
+            # Формируем список заданий для выполнения
+            if follow_accounts:
+                task_types.append("follow")
+                total_tasks += 1
+            
+            if tweet_text:
+                task_types.append("tweet")
+                total_tasks += 1
+            
+            if tweet_id_to_like:
+                task_types.append("like")
+                total_tasks += 1
+            
+            if tweet_id_to_retweet:
+                task_types.append("retweet")
+                total_tasks += 1
+            
+            # Перемешиваем типы заданий для случайного порядка выполнения
+            random.shuffle(task_types)
+            
+            # Выполняем задания
+            for i, task_type in enumerate(task_types):
+                try:
+                    if task_type == "follow" and follow_accounts:
+                        # Выполняем подписки
+                        follow_results = await self.complete_follow_quests(follow_accounts)
+                        if any(follow_results.values()):
+                            success_count += 1
+                    
+                    elif task_type == "tweet" and tweet_text:
+                        # Добавляем уникальный хэштег для избежания дубликатов
+                        unique_text = f"{tweet_text} #{random.randint(10000, 99999)}"
+                        tweet = await self.post_tweet(unique_text)
+                        if tweet:
+                            success_count += 1
+                    
+                    elif task_type == "like" and tweet_id_to_like:
+                        if await self.like_tweet(tweet_id_to_like):
+                            success_count += 1
+                    
+                    elif task_type == "retweet" and tweet_id_to_retweet:
+                        if await self.retweet(tweet_id_to_retweet):
+                            success_count += 1
+                
+                except Exception as e:
+                    logger.error(f"{self.user} ошибка при выполнении {task_type} задания: {str(e)}")
+                
+                # Добавляем задержку между заданиями, если это не последнее задание
+                if i < len(task_types) - 1:
+                    delay = random.uniform(min_delay, max_delay)
+                    logger.info(f"{self.user} задержка {int(delay)} сек. перед следующим Twitter заданием")
+                    await asyncio.sleep(delay)
+            
+            # Закрываем клиент Twitter
+            await self.close()
+            
+            # Возвращаем успех, если хотя бы одно задание выполнено
+            success = success_count > 0
+            if success:
+                logger.success(f"{self.user} успешно выполнено {success_count} из {total_tasks} Twitter заданий")
+            else:
+                logger.warning(f"{self.user} не удалось выполнить ни одного Twitter задания")
+                
+            return success
             
         except Exception as e:
+            # Закрываем клиент Twitter в случае ошибки
+            await self.close()
             logger.error(f"{self.user} ошибка при выполнении Twitter заданий: {str(e)}")
             return False

@@ -12,8 +12,6 @@ else:
 
 FILES_DIR = os.path.join(ROOT_DIR, 'files')
 
-SOLVIUM_API = os.getenv('SOLVIUM_API')
-TWOCAPTCHA_API_KEY = os.getenv('TWOCAPTCHA_API')
 CAPMONSTER_API_KEY = os.getenv('CAPMONSTER_API_KEY')
 
 PROXY_FILE = os.path.join(FILES_DIR, 'proxy.txt')
@@ -21,6 +19,30 @@ PRIVATE_FILE = os.path.join(FILES_DIR, 'private.txt')
 TWITTER_FILE = os.path.join(FILES_DIR, 'twitter.txt')
 
 SETTINGS_FILE = os.path.join(FILES_DIR, 'settings.json')
+ACTUAL_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+ACTUAL_FOLLOWS_TWITTER = [
+                        "StoryChain_ai",
+                        "tokentails",
+                        "PanenkaFC90",
+                        "ScorePlay_xyz",
+                        "wideworlds_ai",
+                        "pets_ww",
+                        "chronicle_ww",
+                        "PictographsNFT",
+                        "entertainm_io",
+                        "bleetz_io",
+                        "RewardedTV_",
+                        "Fantasy_cristal",
+                        "belgranofantasy",
+                        "awanalab",
+                        "arcoin_official",
+                        "TheMetakraft",
+                        "summitx_finance",
+                        "thepixudi",
+                        "clustersxyz",
+                        "JukebloxDapp",
+                        "campnetworkxyz",
+]
 
 LOG_FILE = os.path.join(FILES_DIR, 'log.log')
 ERRORS_FILE = os.path.join(FILES_DIR, 'errors.log')

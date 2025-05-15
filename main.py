@@ -1,61 +1,83 @@
 from functions.create_files import create_files
 from functions.activity import (add_wallets_db, complete_all_wallets_quests, 
-                               get_wallets_stats, complete_specific_quests,
-                               )
-from website.quest_client import QuestClient
+                               get_wallets_stats, complete_specific_quests)
 import asyncio
-import tasks.logo
-from utils.db_api_async.db_init import init_db
+import os
+import sys
 from loguru import logger
 from data.models import Settings
+import rich
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
+# Создаем консоль для красивого вывода
+console = Console()
 
-async def option_add_wallets():
-    await add_wallets_db()
+def print_logo():
+    """Выводит логотип программы"""
+    text = Text()
+    text.append("╔═══════════════════════════════════════════╗\n", style="cyan")
+    text.append("║              ", style="cyan")
+    text.append("CAMP NETWORK FARMER", style="bold white")
+    text.append("              ║\n", style="cyan")
+    text.append("╠═══════════════════════════════════════════╣\n", style="cyan")
+    text.append("║ ", style="cyan")
+    text.append("GitHub: https://github.com/Buldozerch", style="white")
+    text.append("       ║\n", style="cyan")
+    text.append("║ ", style="cyan")
+    text.append("Channel: https://t.me/buldozercode", style="white")
+    text.append("         ║\n", style="cyan")
+    text.append("╚═══════════════════════════════════════════╝", style="cyan")
+    console.print(text)
+    console.print()
 
-async def option_complete_all_quests():
-    """Выполняет все незавершенные задания для всех кошельков"""
-    await complete_all_wallets_quests()
-
-async def option_complete_specific_quests():
-    """Выполняет указанные задания для всех кошельков"""
-    await complete_specific_quests()
-
-async def option_show_stats():
-    """Показывает статистику по всем кошелькам"""
-    await get_wallets_stats()
-
+def print_menu():
+    """Выводит меню программы"""
+    menu = Table(show_header=False, box=None)
+    menu.add_column("Option", style="cyan")
+    menu.add_column("Description", style="white")
+    
+    menu.add_row("1)", "Импорт кошельков в базу данных")
+    menu.add_row("2)", "Выполнить все задания")
+    menu.add_row("3)", "Выполнить выбранные задания")
+    menu.add_row("4)", "Показать статистику")
+    menu.add_row("5)", "Настройки")
+    menu.add_row("6)", "Выход")
+    
+    console.print(menu)
 
 async def option_update_settings():
     """Обновляет настройки программы"""
     settings = Settings()
     try:
         # Выводим текущие настройки
-        print("\nТекущие настройки:")
+        console.print("\n[bold cyan]Текущие настройки:[/]")
         
         # Twitter настройки
-        print("\n1. Twitter настройки:")
-        print(f"   Использовать Twitter: {'Да' if settings.twitter_enabled else 'Нет'}")
-        print(f"   Задержка между действиями в Twitter: {settings.twitter_delay_actions_min}-{settings.twitter_delay_actions_max} секунд")
-        print(f"   Задержка между заданиями Twitter: {settings.twitter_delay_quests_min}-{settings.twitter_delay_quests_max} секунд")
+        console.print("\n[bold]1. Twitter настройки:[/]")
+        console.print(f"   Использовать Twitter: {'[green]Да[/]' if settings.twitter_enabled else '[red]Нет[/]'}")
+        console.print(f"   Задержка между действиями в Twitter: {settings.twitter_delay_actions_min}-{settings.twitter_delay_actions_max} секунд")
+        console.print(f"   Задержка между заданиями Twitter: {settings.twitter_delay_quests_min}-{settings.twitter_delay_quests_max} секунд")
         
         # Общие настройки
-        print("\n2. Общие настройки:")
-        print(f"   Задержка между заданиями: {settings.quest_delay_min}-{settings.quest_delay_max} секунд")
+        console.print("\n[bold]2. Общие настройки:[/]")
+        console.print(f"   Задержка между заданиями: {settings.quest_delay_min}-{settings.quest_delay_max} секунд")
         
         # Настройки кошельков
-        print("\n3. Настройки кошельков:")
-        wallet_end = "все" if settings.wallet_range_end == 0 else settings.wallet_range_end
-        print(f"   Диапазон кошельков: {settings.wallet_range_start}-{wallet_end}")
-        print(f"   Задержка между запуском аккаунтов: {settings.wallet_startup_delay_min}-{settings.wallet_startup_delay_max} секунд")
+        console.print("\n[bold]3. Настройки кошельков:[/]")
+        wallet_end = "[green]все[/]" if settings.wallet_range_end == 0 else str(settings.wallet_range_end)
+        console.print(f"   Диапазон кошельков: {settings.wallet_range_start}-{wallet_end}")
+        console.print(f"   Задержка между запуском аккаунтов: {settings.wallet_startup_delay_min}-{settings.wallet_startup_delay_max} секунд")
         
         # Запрашиваем, какие настройки обновить
-        print("\nВыберите настройки для обновления:")
-        print("1. Twitter настройки")
-        print("2. Общие настройки")
-        print("3. Настройки кошельков")
-        print("4. Все настройки")
-        print("5. Назад")
+        console.print("\n[bold cyan]Выберите настройки для обновления:[/]")
+        console.print("1. Twitter настройки")
+        console.print("2. Общие настройки")
+        console.print("3. Настройки кошельков")
+        console.print("4. Все настройки")
+        console.print("5. Назад")
         
         choice = int(input("> "))
         
@@ -70,7 +92,7 @@ async def option_update_settings():
         
         # Обновляем Twitter настройки
         if choice in [1, 4]:
-            print("\nОбновление Twitter настроек:")
+            console.print("\n[bold]Обновление Twitter настроек:[/]")
             
             # Использовать Twitter
             use_twitter = input("Использовать Twitter (y/n) [текущее: " + 
@@ -98,7 +120,7 @@ async def option_update_settings():
         
         # Обновляем общие настройки
         if choice in [2, 4]:
-            print("\nОбновление общих настроек:")
+            console.print("\n[bold]Обновление общих настроек:[/]")
             
             # Задержка между заданиями
             quest_delay_min = input(f"Минимальная задержка между заданиями (секунды) [текущее: {settings.quest_delay_min}]: ").strip()
@@ -111,7 +133,7 @@ async def option_update_settings():
         
         # Обновляем настройки кошельков
         if choice in [3, 4]:
-            print("\nОбновление настроек кошельков:")
+            console.print("\n[bold]Обновление настроек кошельков:[/]")
             
             # Диапазон кошельков
             wallet_start = input(f"Начальный индекс кошелька [текущее: {settings.wallet_range_start}]: ").strip()
@@ -124,7 +146,7 @@ async def option_update_settings():
             
             # Задержка между запуском аккаунтов
             startup_delay_min = input(f"Минимальная задержка между запуском аккаунтов (секунды) [текущее: {settings.wallet_startup_delay_min}]: ").strip()
-            if startup_delay_min.isdigit() and int(startup_delay_min) > 0:
+            if startup_delay_min.isdigit() and int(startup_delay_min) >= 0:
                 current_settings["wallets"]["startup_delay"]["min"] = int(startup_delay_min)
                 
             startup_delay_max = input(f"Максимальная задержка между запуском аккаунтов (секунды) [текущее: {settings.wallet_startup_delay_max}]: ").strip()
@@ -133,44 +155,99 @@ async def option_update_settings():
         
         # Сохраняем обновленные настройки
         write_json(path=SETTINGS_FILE, obj=current_settings, indent=2)
-        logger.success("Настройки успешно обновлены")
-        
-        # Перезагружаем настройки
-        settings = Settings()
+        console.print("\n[bold green]Настройки успешно обновлены[/]")
         
     except Exception as e:
         logger.error(f"Ошибка при обновлении настроек: {str(e)}")
+        console.print(f"\n[bold red]Ошибка при обновлении настроек: {str(e)}[/]")
 
 async def main():
+    """Основная функция программы"""
+    # Инициализация файлов и базы данных
     create_files()
+    from utils.db_api_async.db_init import init_db
     await init_db()
-    print('''  Select the action:
-    1) Import Wallets in DB
-    2) Complete All Quests (выполнить все задания)
-    3) Complete Specific Quests (выполнить выбранные задания)
-    4) Show Stats (показать статистику)
-    5) Settings (настройки)
-    6) Exit.''')
-
-    try:
-        action = int(input('> '))
-        if action == 1:
-            await option_add_wallets()
-        elif action == 2:
-            await option_complete_all_quests()
-        elif action == 3:
-            await option_complete_specific_quests()
-        elif action == 4:
-            await option_show_stats()
-        elif action == 5:
-            await option_update_settings()
-
-    except KeyboardInterrupt:
-        print()
-    except ValueError as err:
-        logger.error(f'Value error: {err}')
-    except BaseException as e:
-        logger.error(f'Something went wrong: {e}')
+    
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')  # Очищаем консоль
+        print_logo()
+        print_menu()
+        
+        try:
+            action = input("\n> ")
+            
+            if action == "1":
+                # Импорт кошельков
+                console.print("\n[bold cyan]Импорт кошельков в базу данных...[/]")
+                await add_wallets_db()
+                console.print("[bold green]Импорт завершен. Нажмите Enter для продолжения...[/]")
+                input()
+                
+            elif action == "2":
+                # Выполнить все задания
+                console.print("\n[bold cyan]Выполнение всех заданий...[/]")
+                await complete_all_wallets_quests()
+                console.print("[bold green]Выполнение заданий завершено. Нажмите Enter для продолжения...[/]")
+                input()
+                
+            elif action == "3":
+                # Выполнить выбранные задания
+                console.print("\n[bold cyan]Выполнение выбранных заданий...[/]")
+                await complete_specific_quests()
+                console.print("[bold green]Выполнение заданий завершено. Нажмите Enter для продолжения...[/]")
+                input()
+                
+            elif action == "4":
+                # Показать статистику
+                console.print("\n[bold cyan]Получение статистики...[/]")
+                await get_wallets_stats()
+                console.print("[bold green]Нажмите Enter для продолжения...[/]")
+                input()
+                
+            elif action == "5":
+                # Настройки
+                await option_update_settings()
+                
+            elif action == "6":
+                # Выход
+                console.print("\n[bold cyan]Выход из программы. До свидания![/]")
+                sys.exit(0)
+                
+            else:
+                console.print("\n[bold yellow]Неверный выбор. Пожалуйста, выберите действие от 1 до 6.[/]")
+                input("Нажмите Enter для продолжения...")
+                
+        except KeyboardInterrupt:
+            console.print("\n[bold cyan]Программа прервана пользователем. До свидания![/]")
+            sys.exit(0)
+        except ValueError as err:
+            logger.error(f'Ошибка ввода данных: {err}')
+            console.print(f"\n[bold red]Ошибка ввода данных: {err}[/]")
+            input("Нажмите Enter для продолжения...")
+        except Exception as e:
+            logger.error(f'Неожиданная ошибка: {e}')
+            console.print(f"\n[bold red]Неожиданная ошибка: {e}[/]")
+            input("Нажмите Enter для продолжения...")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        # # Настраиваем логи
+        # logger.remove()  # Удаляем стандартный обработчик
+        # # Добавляем только необходимые уровни логирования
+        # logger.add(
+        #     "files/errors.log", 
+        #     level="ERROR", 
+        #     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+        # )
+        # logger.add(
+        #     "files/log.log", 
+        #     level="INFO",
+        #     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+        #     filter=lambda record: record["level"].name == "INFO" or record["level"].name == "SUCCESS"
+        # )
+        
+        # Запускаем программу
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        console.print("\n[bold cyan]Программа прервана пользователем. До свидания![/]")
+        sys.exit(0)

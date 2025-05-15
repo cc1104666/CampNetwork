@@ -5,6 +5,7 @@ import aiohttp
 from typing import Dict, Tuple, Union, Optional
 from loguru import logger
 from utils.db_api_async.models import User
+from data.config import ACTUAL_UA
 
 
 class BaseHttpClient:
@@ -31,7 +32,7 @@ class BaseHttpClient:
             Сформированные заголовки
         """
         base_headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+            'User-Agent': ACTUAL_UA,
             'Accept': '*/*',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',

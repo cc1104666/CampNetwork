@@ -6,7 +6,7 @@ import urllib.parse
 from typing import Dict, Optional, Tuple, Union
 from loguru import logger
 from urllib.parse import urlparse
-from data.config import CAPMONSTER_API_KEY
+from data.config import CAPMONSTER_API_KEY, ACTUAL_UA
 
 
 class CloudflareHandler:
@@ -77,7 +77,7 @@ class CloudflareHandler:
             
             # Кодируем HTML в base64
             html_base64 = self.encode_html_to_base64(html)           
-            windows_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+            windows_user_agent = ACTUAL_UA
             
             # Данные для запроса к CapMonster
             json_data = {
