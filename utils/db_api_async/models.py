@@ -14,6 +14,7 @@ class User(Base):
     proxy: Mapped[str] = mapped_column(Text, nullable=True, unique=False)
     user_agent: Mapped[str] = mapped_column(Text, nullable=False, unique=False)
     completed_quests: Mapped[str] = mapped_column(Text, nullable=True, default="")  # Просто строка с разделителями
+    twitter_token: Mapped[str] = mapped_column(Text, nullable=True, default=None)  # Добавляем поле для Twitter токена
 
     def __str__(self):
         return f'{self.public_key}'

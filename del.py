@@ -1,0 +1,18 @@
+cookies = {}
+cookies['1'] = 1
+print(cookies)
+cookies.pop('1')
+print(cookies)
+test = cookies.get('1')
+print(test)
+cookies.pop('1')
+cookies.pop('1')
+cookies.pop('1')
+cookies.pop('1')
+cookies.pop('1')
+"""
+jp'cookies': {'cf_clearance': '43CYRXxZhNYntMz0WA4Dqc2txbDWoyDWMSqvK4EGrMs-1747219233-1.2.1.1-wJKGeN9gzJu.C9diZMIx1.xPGfKt1dntO0KOlE.xCZbkfVu6S_wyGpdJriL0FwXAVe7DWsFTXaBye1a3Fea7MCwpkIa92pjflU6W8vq_HwwrWdkYNTQdqb5M7PLx4gCHnt49Y4dVKqDaVrIOl375S9yoy8_luGDZ5g41M_lnlG4yqX3zMPs0A52hA8T3LGQbzxrCqNc2yCEveTbQ3iT89PqOHf7GEvjB1O20s2oIDoGvrhzhu79hCsZ0oA.neBktWm_AKNwp3KcQwb2uOno47ezpF1xE_AgSlQCmfi1U1aS.NeCmyDGLkpn5hwpL6QcwPu85HszS0VcTYKFwrYA0FuUgpdWX7FvFnjl65tegiU48m.eVfWhWN0WmGNpFp2qf', '__cf_bm': 'MUzqz2g1FWoTEkq_Y0Bg3ieIablMTQsjM2rJNOeZYrM-1747219236-1.0.1.1-.wq5Qdc7BmY9ryJBRYLyB.ICcO9CvilGfLccEOpGmxT48XzbGOTm7nwWmoe.iOkMqQhztBcu_hNLp83aCquNzEn7jAdwNeXSKLpXPqopzAE', '__Host-next-auth.csrf-token': '49624afef5e990292fb9fbeb8d49a2a3050c3e40dbd53b617d3931d6ab055cb6%7C1eb34cce58faabc27a5e65a5ba8d3c241bbd0fd292fa100c3ad41d235bf16013', '__Secure-next-auth.callback-url': 'https%3A%2F%2Floyalty.campnetwork.xyz', '__Secure-next-auth.session-token': 'eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..6aKQSU7Gto7sbEzM.lxWR9Ao0h1lkySD7nzDoJWZR2file1KyNe9oNAH0kiaXY60jCxHiW15mQFBd8tLw-0OdBMFU5PRcVgZmhJ5rSEOCy5yluYOvljKMni1jTpRRialbWKrp_anEkQzldMYWoSkXSl-CVNrgw_Y2G6aZ6M7IFD9yIcsYD0H1TvYawLugaNPQJnw3vKJxdD3zTVRe4Tp3_dh85xMsvDeNBENfUxhyBlJPZnz4ecDIFDD2LBiG3a57x2uZipgA84Dcf3rhP4L85S409KyYRY9XZG9Q_Q6LK7uV_eKko-mkgziCli_ArosmOp-ZJw0r.suMzER0ZV9j9ZMvFq5tqCA', 'accountLinkData': ''}
+AMP_ca1b91c797	"JTdCJTIyZGV2aWNlSWQlMjIlM0ElMjIyNzNmZjcxZS01MmQ2LTRhNTQtODMwOC0xNDE5MDg2ZmIzZTMlMjIlMkMlMjJ1c2VySWQlMjIlM0ElMjI3NDcwMTMyZi05Mjc1LTQ2MDktYjY0My00MzNjNGVmOWFjODQlMjIlMkMlMjJzZXNzaW9uSWQlMjIlM0ExNzQ3MjE0OTIyOTI3JTJDJTIyb3B0T3V0JTIyJTNBZmFsc2UlMkMlMjJsYXN0RXZlbnRUaW1lJTIyJTNBMTc0NzIxNzUyODYwMyUyQyUyMmxhc3RFdmVudElkJTIyJTNBMzA0JTJDJTIycGFnZUNvdW50ZXIlMjIlM0EzNiU3RA=="
+AMP_MKTG_ca1b91c797	"JTdCJTIycmVmZXJyZXIlMjIlM0ElMjJodHRwcyUzQSUyRiUyRnguY29tJTJGJTIyJTJDJTIycmVmZXJyaW5nX2RvbWFpbiUyMiUzQSUyMnguY29tJTIyJTdE"
+referral_code	"7EAKYD9M"
+"""

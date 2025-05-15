@@ -16,6 +16,9 @@ def create_files():
     if not os.path.exists(config.PROXY_FILE):
         with open(config.PROXY_FILE, 'w') as f:
             pass
+    if not os.path.exists(config.TWITTER_FILE):
+        with open(config.TWITTER_FILE, 'w') as f:
+            pass
 
     try:
         current_settings: dict | None = read_json(path=config.SETTINGS_FILE)
@@ -23,6 +26,36 @@ def create_files():
         current_settings = {}
 
     settings = {
+        # Twitter настройки
+        "twitter": {
+            "enabled": True,
+            "delay_between_actions": {
+                "min": 120,  # секунды
+                "max": 180  # секунды
+            },
+            "delay_between_quests": {
+                "min": 300,  # секунды
+                "max": 600   # секунды
+            }
+        },
+        # Общие настройки
+        "quests": {
+            "delay_between_quests": {
+                "min": 20,  # секунды
+                "max": 40   # секунды
+            }
+        },
+        # Настройки запуска аккаунтов
+        "wallets": {
+            "range": {
+                "start": 0,  # начальный индекс
+                "end": 0     # конечный индекс (0 = все)
+            },
+            "startup_delay": {
+                "min": 0,   # секунды
+                "max": 7200   # секунды
+            }
+        }
     }
     write_json(path=config.SETTINGS_FILE, obj=update_dict(modifiable=current_settings, template=settings), indent=2)
 create_files()

@@ -9,13 +9,14 @@ class DB:
     def __init__(self, session):
         self.session = session
 
-    async def add_wallet(self, private_key: str, public_key: str, user_agent: str, proxy: str | None = None):
+    async def add_wallet(self, private_key: str, public_key: str, user_agent: str, proxy: str | None = None, twitter_token: str | None = None):
         """Добавляет кошелек в базу данных"""
         wallet = User(
             private_key=private_key,
             public_key=public_key,
             proxy=proxy,
-            user_agent=user_agent
+            user_agent=user_agent,
+            twitter_token=twitter_token
         )
         try:
             self.session.add(wallet)

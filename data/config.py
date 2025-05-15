@@ -18,6 +18,7 @@ CAPMONSTER_API_KEY = os.getenv('CAPMONSTER_API_KEY')
 
 PROXY_FILE = os.path.join(FILES_DIR, 'proxy.txt')
 PRIVATE_FILE = os.path.join(FILES_DIR, 'private.txt')
+TWITTER_FILE = os.path.join(FILES_DIR, 'twitter.txt')
 
 SETTINGS_FILE = os.path.join(FILES_DIR, 'settings.json')
 

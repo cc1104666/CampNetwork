@@ -3,7 +3,7 @@ import aiohttp
 import json
 import base64
 import urllib.parse
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 from loguru import logger
 from urllib.parse import urlparse
 from data.config import CAPMONSTER_API_KEY
@@ -77,7 +77,7 @@ class CloudflareHandler:
             
             # Кодируем HTML в base64
             html_base64 = self.encode_html_to_base64(html)           
-            windows_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+            windows_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
             
             # Данные для запроса к CapMonster
             json_data = {
@@ -226,7 +226,11 @@ class CloudflareHandler:
                     
         return captcha_token
     
-    async def handle_cloudflare_protection(self, url: str, method: str = "GET") -> Tuple[bool, Optional[str]]:
+    async def handle_cloudflare_protection(self, url: str, method: str = "GET", 
+                                           data: Optional[Dict] = None, 
+                                           json_data: Optional[Dict] = None,
+                                           headers: Optional[Dict] = None,
+                                           allow_redirects: bool = True) -> Tuple[bool, Union[Dict, str]]:
         """
         Обрабатывает защиту Cloudflare
         
@@ -241,12 +245,12 @@ class CloudflareHandler:
             logger.info(f"{self.http_client.user} проверка наличия Cloudflare Turnstile защиты")
             
             # Делаем начальный запрос для проверки наличия Cloudflare
-            success, response = await self.http_client.request(url=url, method=method)
+            success, response = await self.http_client.request(url=url, method=method, data=data, json_data=json_data, headers=headers, allow_redirects=allow_redirects)
             
             # Если запрос успешен, защиты нет
             if success:
                 logger.info(f"{self.http_client.user} защита Cloudflare отсутствует или уже обойдена")
-                return True, None
+                return True, response
                 
             # Если запрос вернул HTML с Cloudflare, решаем капчу
             logger.info(f"{self.http_client.user} обнаружена защита Cloudflare, начинаю решение капчи")
@@ -260,26 +264,21 @@ class CloudflareHandler:
                 
                 # Повторяем запрос с токеном
                 logger.info(f"{self.http_client.user} повторный запрос с токеном cf_clearance")
-                windows_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
                 
                 # Важно: cf_clearance привязан к User-Agent, поэтому используем тот же User-Agent
-                success, response = await self.http_client.request(
-                    url=url, 
-                    method=method,
-                    headers={'User-Agent': windows_user_agent}
-                )
-                
+
+                success, response = await self.http_client.request(url=url, method=method, data=data, json_data=json_data, headers=headers, allow_redirects=allow_redirects)
                 if success:
                     logger.success(f"{self.http_client.user} защита Cloudflare успешно обойдена")
-                    return True, cf_clearance
+                    return True, response
                 else:
                     logger.error(f"{self.http_client.user} не удалось обойти защиту Cloudflare: {response}")
-                    return False, None
+                    return False, response
             else:
                 logger.error(f"{self.http_client.user} не удалось получить токен cf_clearance")
-                return False, None
+                return False, response
                     
             
         except Exception as e:
             logger.error(f"{self.http_client.user} ошибка при обработке Cloudflare защиты: {str(e)}")
-            return False, None
+            return False, str(e)

@@ -31,7 +31,7 @@ class BaseHttpClient:
             Сформированные заголовки
         """
         base_headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
             'Accept': '*/*',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -59,7 +59,9 @@ class BaseHttpClient:
         params: Optional[Dict] = None, 
         headers: Optional[Dict] = None, 
         timeout: int = 30, 
-        retries: int = 3
+        retries: int = 5,
+        extra_cookies: bool = False,
+        allow_redirects: bool = True  # Добавляем параметр для управления редиректами
     ) -> Tuple[bool, Union[Dict, str]]:
         """
         Выполняет HTTP-запрос с автоматическими повторными попытками
@@ -85,9 +87,13 @@ class BaseHttpClient:
             'proxy': self.user.proxy,
             'headers': base_headers,
             'cookies': self.cookies,
-            'timeout': timeout
+            'timeout': timeout,
+            'allow_redirects': allow_redirects  # Добавляем параметр
         }
-        
+        if not extra_cookies:
+            self.cookies['accountLinkData']= ""
+        if not extra_cookies and self.cookies.get('__cf_bm'):
+            self.cookies.pop('__cf_bm')
         # Добавляем опциональные параметры
         if json_data is not None:
             request_kwargs['json'] = json_data
@@ -106,6 +112,9 @@ class BaseHttpClient:
                             for name, cookie in resp.cookies.items():
                                 self.cookies[name] = cookie.value
                         
+                        if 300 <= resp.status < 400 and not allow_redirects:
+                            headers_dict = dict(resp.headers)
+                            return False, headers_dict  # Возвращаем заголовки вместо тела ответа
                         # Успешный ответ
                         if resp.status == 200 or resp.status == 202:
                             try:
@@ -131,7 +140,7 @@ class BaseHttpClient:
                                 
                                 # Если это не последняя попытка, делаем большую задержку и пробуем снова
                                 if attempt < retries - 1:
-                                    wait_time = random.uniform(60, 120)  # 1-2 минуты
+                                    wait_time = random.uniform(10, 30)  # 1-2 минуты
                                     logger.info(f"{self.user} ожидание {int(wait_time)} секунд перед следующей попыткой")
                                     await asyncio.sleep(wait_time)
                                     continue
