@@ -515,16 +515,6 @@ class TwitterClient(BaseHttpClient):
             return False
             
         try:
-            # Проверяем, подключен ли Twitter к CampNetwork
-            if not self.is_connected:
-                is_verified = await self.check_twitter_connection_status()
-                if not is_verified:
-                    logger.info(f"{self.user} Twitter не подключен к CampNetwork, подключаем...")
-                    if not await self.connect_twitter_to_camp():
-                        logger.error(f"{self.user} не удалось подключить Twitter к CampNetwork")
-                        return False
-            return False
-            
             # Выполняем действия в зависимости от задания
             quest_success = False
             
@@ -748,6 +738,13 @@ class TwitterQuestManager:
                     logger.error(f"{self.user} не удалось инициализировать Twitter клиент")
                     return False
 
+                if not twitter_client.is_connected:
+                    is_verified = await twitter_client.check_twitter_connection_status()
+                    if not is_verified:
+                        logger.info(f"{self.user} Twitter не подключен к CampNetwork, подключаем...")
+                        if not await twitter_client.connect_twitter_to_camp():
+                            logger.error(f"{self.user} не удалось подключить Twitter к CampNetwork")
+                            return False
                 # Выполняем задание подписки
                 if follow_accounts:
                     results["TwitterFollow"] = await twitter_client.complete_twitter_quest(
