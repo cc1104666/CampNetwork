@@ -21,22 +21,17 @@ console = Console()
 
 def print_logo():
     """Выводит логотип программы"""
-    text = Text()
-    text.append("╔═══════════════════════════════════════════╗\n", style="cyan")
-    text.append("║              ", style="cyan")
-    text.append("CAMP NETWORK FARMER", style="bold white")
-    text.append("              ║\n", style="cyan")
-    text.append("╠═══════════════════════════════════════════╣\n", style="cyan")
-    text.append("║ ", style="cyan")
-    text.append("GitHub: https://github.com/Buldozerch", style="white")
-    text.append("       ║\n", style="cyan")
-    text.append("║ ", style="cyan")
-    text.append("Channel: https://t.me/buldozercode", style="white")
-    text.append("         ║\n", style="cyan")
-    text.append("╚═══════════════════════════════════════════╝", style="cyan")
-    console.print(text)
+    # Создаем более простую рамку с фиксированной шириной
+    panel = Panel(
+        "[bold white]CAMP NETWORK FARMER[/bold white]\n\n"
+        "GitHub: [link]https://github.com/Buldozerch[/link]\n"
+        "Channel: [link]https://t.me/buldozercode[/link]",
+        width=60,
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(panel)
     console.print()
-
 
 async def option_update_settings():
     """Обновляет настройки программы"""
@@ -415,7 +410,7 @@ async def main():
                 
             elif action == "7":
                 # Выход
-                console.print("\n[bold cyan]Выход из программы. До свидания![/]")
+                console.print("\n[bold cyan]Выход из программы[/]")
                 sys.exit(0)
                 
             else:
@@ -423,7 +418,7 @@ async def main():
                 input("Нажмите Enter для продолжения...")
                 
         except KeyboardInterrupt:
-            console.print("\n[bold cyan]Программа прервана пользователем. До свидания![/]")
+            console.print("\n[bold cyan]Выход из программы.[/]")
             sys.exit(0)
         except ValueError as err:
             logger.error(f'Ошибка ввода данных: {err}')
