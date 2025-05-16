@@ -478,7 +478,7 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                             else:
                                 logger.error(f"{wallet} ошибка при подписке на {account_name}: {error_message}")
                                 # Добавляем задержку после ошибки
-                                error_delay = random.uniform(2, 3)
+                                error_delay = random.uniform(30, 60)
                                 logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
                                 await asyncio.sleep(error_delay)
                                 continue
@@ -1076,6 +1076,15 @@ async def get_wallets_stats():
         # Создаем словарь для обратного поиска названий по ID
         quest_names_by_id = {quest_id: quest_name for quest_name, quest_id in QuestClient.QUEST_IDS.items()}
         
+        # Добавляем Twitter задания в словарь
+        twitter_quests = {}
+        for account_name, quest_id in TwitterClient.TWITTER_QUESTS_MAP.get("Follow", {}).items():
+            quest_names_by_id[quest_id] = f"Twitter Follow: @{account_name}"
+            twitter_quests[quest_id] = account_name
+        
+        # Получаем общее количество заданий (включая Twitter)
+        total_quests_count = len(QuestClient.QUEST_IDS) + len(twitter_quests)
+        
         # Создаем словарь для хранения статистики
         stats = {}
         
@@ -1088,20 +1097,39 @@ async def get_wallets_stats():
                 
                 # Получаем названия выполненных заданий по их ID
                 completed_quest_names = []
+                
+                # Обычные квесты
+                regular_completed = 0
+                twitter_completed = 0
+                
                 for quest_id in completed_quests_ids:
-                    if quest_id in quest_names_by_id:
-                        completed_quest_names.append(quest_names_by_id[quest_id])
+                    quest_name = quest_names_by_id.get(quest_id)
+                    
+                    if quest_name:
+                        completed_quest_names.append(quest_name)
+                        
+                        # Определяем тип задания и обновляем счетчики
+                        if quest_id in twitter_quests:
+                            twitter_completed += 1
+                        else:
+                            regular_completed += 1
                     else:
                         completed_quest_names.append(f"Unknown ({quest_id})")
                 
                 # Добавляем информацию о Twitter
                 twitter_status = "Подключен" if wallet.twitter_token else "Не подключен"
+                twitter_health = "OK" if wallet.twitter_status == "OK" else "Проблема" if wallet.twitter_status == "BAD" else "Не определено"
                 
                 stats[wallet.public_key] = {
                     "completed_count": completed_count,
-                    "total_count": len(QuestClient.QUEST_IDS),
+                    "total_count": total_quests_count,
+                    "regular_completed": regular_completed,
+                    "twitter_completed": twitter_completed,
+                    "regular_total": len(QuestClient.QUEST_IDS),
+                    "twitter_total": len(twitter_quests),
                     "completed_quests": completed_quest_names,
-                    "twitter_status": twitter_status
+                    "twitter_status": twitter_status,
+                    "twitter_health": twitter_health
                 }
                 
             except Exception as e:
@@ -1129,22 +1157,45 @@ async def get_wallets_stats():
                 # Сокращаем адрес кошелька для компактности
                 short_key = f"{wallet_key[:6]}...{wallet_key[-4:]}"
                 
-                logger.info(f"{short_key}: {wallet_stats['completed_count']}/{wallet_stats['total_count']} заданий ({percent}%), Twitter: {wallet_stats['twitter_status']}")
+                # Полная статистика с разбивкой на обычные и Twitter задания
+                logger.info(f"{short_key}: {wallet_stats['completed_count']}/{wallet_stats['total_count']} заданий ({percent}%), " + 
+                           f"Обычные: {wallet_stats['regular_completed']}/{wallet_stats['regular_total']}, " +
+                           f"Twitter: {wallet_stats['twitter_completed']}/{wallet_stats['twitter_total']}, " +
+                           f"Twitter: {wallet_stats['twitter_status']} ({wallet_stats['twitter_health']})")
                 
                 # Если есть выполненные задания, выводим их списком
-                if wallet_stats['completed_count'] > 0 and wallet_stats['completed_count'] < wallet_stats['total_count']:
-                    completed_list = ", ".join(wallet_stats['completed_quests'])
-                    logger.info(f"  Выполненные задания: {completed_list}")
+                # if wallet_stats['completed_count'] > 0 and wallet_stats['completed_count'] < wallet_stats['total_count']:
+                #     # Ограничиваем количество отображаемых заданий, чтобы не загромождать вывод
+                #     max_display = 10
+                #     if len(wallet_stats['completed_quests']) > max_display:
+                #         display_quests = wallet_stats['completed_quests'][:max_display]
+                #         completed_list = ", ".join(display_quests) + f"... и еще {len(wallet_stats['completed_quests']) - max_display}"
+                #     else:
+                #         completed_list = ", ".join(wallet_stats['completed_quests'])
+                #     
+                #     logger.info(f"  Выполненные задания: {completed_list}")
                 
         # Выводим общую статистику
         total_wallets = len(stats)
         completed_wallets = sum(1 for wallet in stats.values() if "error" not in wallet and wallet["completed_count"] == wallet["total_count"])
         average_completion = sum(wallet["completed_count"] for wallet in stats.values() if "error" not in wallet) / total_wallets if total_wallets > 0 else 0
         
+        # Отдельная статистика по обычным и Twitter заданиям
+        regular_average = sum(wallet["regular_completed"] for wallet in stats.values() if "error" not in wallet) / total_wallets if total_wallets > 0 else 0
+        twitter_average = sum(wallet["twitter_completed"] for wallet in stats.values() if "error" not in wallet) / total_wallets if total_wallets > 0 else 0
+        
+        # Статистика подключения Twitter
+        twitter_connected = sum(1 for wallet in stats.values() if "error" not in wallet and wallet["twitter_status"] == "Подключен")
+        twitter_healthy = sum(1 for wallet in stats.values() if "error" not in wallet and wallet["twitter_health"] == "OK")
+        
         print("\n=== Общая статистика ===")
         print(f"Всего кошельков: {total_wallets}")
         print(f"Завершено полностью: {completed_wallets} ({int((completed_wallets/total_wallets)*100)}%)")
-        print(f"Среднее количество выполненных заданий: {average_completion:.1f} из {len(QuestClient.QUEST_IDS)}")
+        print(f"Среднее количество выполненных заданий: {average_completion:.1f} из {total_quests_count}")
+        print(f"  - Обычные задания: {regular_average:.1f} из {len(QuestClient.QUEST_IDS)}")
+        print(f"  - Twitter задания: {twitter_average:.1f} из {len(twitter_quests)}")
+        print(f"Twitter статус: подключено {twitter_connected} из {total_wallets} ({int((twitter_connected/total_wallets)*100)}%)")
+        print(f"Twitter здоровье: в порядке {twitter_healthy} из {twitter_connected} ({int((twitter_healthy/twitter_connected)*100 if twitter_connected else 0)}%)")
         
         return stats
             

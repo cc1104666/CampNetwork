@@ -407,6 +407,7 @@ async def main():
             elif action == "6":
                 # Настройки
                 await option_update_settings()
+                sys.exit(0)
                 
             elif action == "7":
                 # Выход
