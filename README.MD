@@ -39,6 +39,7 @@ python main.py
 ### Настройка перед запуском
 
 - Заполните приватные ключи в files/private.txt (по одному ключу на строку)
+- Создайте файл .env по примеру с env_example и вставьте API ключ с capmonster.cloud(нужны пару $ на балансе)
 - Заполните прокси в files/proxy.txt в формате: http://log:pass@ip:port или log:pass@ip:port
 - Если вы хотите использовать Twitter-задания, заполните токены Twitter в files/twitter.txt
 - Настройте параметры в files/settings.json
