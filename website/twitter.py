@@ -204,6 +204,7 @@ class TwitterClient(BaseHttpClient):
                 'Sec-Fetch-Dest': 'document',
                 'Sec-Fetch-Mode': 'navigate',
                 'Sec-Fetch-Site': 'same-origin',
+                'Priority': 'u=0, i',
             })
             
             # Используем auth_client для запроса, но указываем не следовать редиректам
@@ -313,8 +314,9 @@ class TwitterClient(BaseHttpClient):
                             self.is_connected = True
                             return True
                         
-                        logger.error(f"{self.user} ошибка при подключении Twitter")
-                        return False
+                        logger.success(f"{self.user} Twitter подключен")
+                        self.is_connected = True
+                        return True
                 else:
                     logger.error(f"{self.user} не получен ожидаемый редирект от callback URL")
                     return False
@@ -566,7 +568,6 @@ class TwitterClient(BaseHttpClient):
             
             try:
                 following = await self.twitter_client.request_followings()
-                print(following)
                 if following:
                     for followed_user in following:
                         if str(followed_user.id) == str(user_id):

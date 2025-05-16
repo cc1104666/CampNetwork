@@ -2,6 +2,7 @@ import os
 from loguru import logger
 import random
 import asyncio
+from website import auth_client
 from website.camp_client import CampNetworkClient
 from typing import  List, Tuple 
 from website.twitter import TwitterClient
@@ -377,43 +378,65 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                     return False, completed_count
             
             # Проверяем подключение Twitter и переподключаем при необходимости
-            twitter_connected = await twitter_client.check_twitter_connection_status()
+            connect_attempts = 0
+            max_connect_attempts = 3  # Максимальное количество попыток подключения
             
-            if not twitter_connected:
-                logger.info(f"{wallet} Twitter не подключен, выполняю подключение")
+            while connect_attempts < max_connect_attempts:
+                twitter_connected = await twitter_client.check_twitter_connection_status()
+                
+                if twitter_connected:
+                    logger.success(f"{wallet} Twitter аккаунт подключен к CampNetwork")
+                    break
+                
+                logger.info(f"{wallet} Twitter не подключен, выполняю подключение (попытка {connect_attempts + 1}/{max_connect_attempts})")
                 
                 # Подключаем Twitter аккаунт к CampNetwork
                 connect_success = await twitter_client.connect_twitter_to_camp()
-                if not connect_success:
-                    logger.error(f"{wallet} не удалось подключить Twitter к CampNetwork")
+                
+                if connect_success:
+                    logger.success(f"{wallet} успешно подключил Twitter к CampNetwork")
+                    break
+                else:
+                    connect_attempts += 1
+                    logger.error(f"{wallet} не удалось подключить Twitter к CampNetwork (попытка {connect_attempts}/{max_connect_attempts})")
                     
                     # Добавляем задержку после ошибки
-                    error_delay = random.uniform(2, 3)
-                    logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                    error_delay = random.uniform(3, 5)  # Увеличенная задержка для подключения
+                    logger.info(f"{wallet} задержка {error_delay:.1f} сек. перед следующей попыткой")
                     await asyncio.sleep(error_delay)
                     
                     # Проверяем, может быть проблема с токеном Twitter
-                    last_error = getattr(twitter_client, 'last_error', '')
-                    if last_error and any(x in str(last_error).lower() for x in ["unauthorized", "auth", "token", "login"]):
-                        logger.warning(f"{wallet} проблема с токеном Twitter: {last_error}")
-                        await resource_manager.mark_twitter_as_bad(wallet.id)
-                        
-                        # Если включена автозамена, пробуем заменить токен
-                        if auto_replace and twitter_retry_count < max_twitter_retries - 1:
-                            success, message = await resource_manager.replace_twitter(wallet.id)
-                            if success:
-                                logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
-                                # Обновляем токен в кошельке
-                                async with Session() as session:
-                                    updated_wallet = await session.get(User, wallet.id)
-                                    if updated_wallet and updated_wallet.twitter_token:
-                                        wallet.twitter_token = updated_wallet.twitter_token
-                                        # Увеличиваем счетчик попыток и продолжаем
-                                        twitter_retry_count += 1
-                                        continue
-                            else:
-                                logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
-                    
+                    if connect_attempts >= max_connect_attempts:
+                        last_error = getattr(twitter_client, 'last_error', '')
+                        if last_error and any(x in str(last_error).lower() for x in ["unauthorized", "auth", "token", "login"]):
+                            logger.warning(f"{wallet} проблема с токеном Twitter: {last_error}")
+                            await resource_manager.mark_twitter_as_bad(wallet.id)
+                            
+                            # Если включена автозамена, пробуем заменить токен
+                            if auto_replace and twitter_retry_count < max_twitter_retries - 1:
+                                success, message = await resource_manager.replace_twitter(wallet.id)
+                                if success:
+                                    logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
+                                    # Обновляем токен в кошельке
+                                    async with Session() as session:
+                                        updated_wallet = await session.get(User, wallet.id)
+                                        if updated_wallet and updated_wallet.twitter_token:
+                                            wallet.twitter_token = updated_wallet.twitter_token
+                                            # Увеличиваем счетчик попыток и продолжаем со следующей итерацией основного цикла
+                                            twitter_retry_count += 1
+                                            break
+                                else:
+                                    logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
+                                    return False, completed_count
+            
+            # Проверяем, подключился ли Twitter после всех попыток
+            if connect_attempts >= max_connect_attempts:
+                if twitter_retry_count < max_twitter_retries - 1:
+                    # Еще есть попытки основного цикла, продолжим со следующей итерацией
+                    twitter_retry_count += 1
+                    continue
+                else:
+                    logger.error(f"{wallet} не удалось подключить Twitter к CampNetwork после всех попыток")
                     return False, completed_count
             
             # Если дневной лимит уже достигнут, пропускаем выполнение заданий
@@ -466,8 +489,8 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                         if already_following:
                             logger.info(f"{wallet} уже подписан на {account_name}, пробуем выполнить задание")
                     
-                        # Отправляем запрос на выполнение задания
-                        complete_url = f"{camp_client.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
+                        # Отправляем запрос на выполнение задания с повторными попытками
+                        complete_url = f"{camp_client.auth_client.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
                         
                         headers = await camp_client.auth_client.get_headers({
                             'Accept': 'application/json, text/plain, */*',
@@ -475,38 +498,53 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                             'Origin': 'https://loyalty.campnetwork.xyz',
                         })
                         
-                        success, response = await camp_client.auth_client.request(
-                            url=complete_url,
-                            method="POST",
-                            json_data={},
-                            headers=headers
-                        )
+                        # Делаем несколько попыток выполнения задания
+                        complete_attempts = 0
+                        max_complete_attempts = 3  # Максимальное количество попыток выполнения задания
                         
-                        if success:
-                            logger.success(f"{wallet} успешно выполнено задание подписки на {account_name}")
-                            completed_count += 1
+                        while complete_attempts < max_complete_attempts:
+                            success, response = await camp_client.auth_client.request(
+                                url=complete_url,
+                                method="POST",
+                                json_data={},
+                                headers=headers
+                            )
                             
-                            # Отмечаем задание как выполненное в БД
-                            async with Session() as session:
-                                db = DB(session=session)
-                                await db.mark_quest_completed(wallet.id, quest_id)
-                        
-                        elif isinstance(response, dict) and response.get("message") == "You have already been rewarded":
-                            logger.info(f"{wallet} задание подписки на {account_name} уже отмечено как выполненное")
-                            completed_count += 1
+                            if success:
+                                logger.success(f"{wallet} успешно выполнено задание подписки на {account_name}")
+                                completed_count += 1
+                                
+                                # Отмечаем задание как выполненное в БД
+                                async with Session() as session:
+                                    db = DB(session=session)
+                                    await db.mark_quest_completed(wallet.id, quest_id)
+                                
+                                # Успех, выходим из цикла попыток
+                                break
                             
-                            # Отмечаем задание как выполненное в БД
-                            async with Session() as session:
-                                db = DB(session=session)
-                                await db.mark_quest_completed(wallet.id, quest_id)
-                        
-                        else:
-                            logger.error(f"{wallet} ошибка при выполнении задания подписки на {account_name}")
+                            elif isinstance(response, dict) and response.get("message") == "You have already been rewarded":
+                                logger.info(f"{wallet} задание подписки на {account_name} уже отмечено как выполненное")
+                                completed_count += 1
+                                
+                                # Отмечаем задание как выполненное в БД
+                                async with Session() as session:
+                                    db = DB(session=session)
+                                    await db.mark_quest_completed(wallet.id, quest_id)
+                                
+                                # Успех, выходим из цикла попыток
+                                break
                             
-                            # Добавляем задержку после ошибки
-                            error_delay = random.uniform(2, 3)
-                            logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
-                            await asyncio.sleep(error_delay)
+                            else:
+                                complete_attempts += 1
+                                logger.warning(f"{wallet} не удалось выполнить задание подписки на {account_name} (попытка {complete_attempts}/{max_complete_attempts})")
+                                
+                                if complete_attempts < max_complete_attempts:
+                                    # Добавляем задержку перед следующей попыткой
+                                    retry_delay = random.uniform(5, 10)  # Увеличенная задержка между попытками
+                                    logger.info(f"{wallet} задержка {retry_delay:.1f} сек. перед повторной попыткой выполнения задания")
+                                    await asyncio.sleep(retry_delay)
+                                else:
+                                    logger.error(f"{wallet} не удалось выполнить задание подписки на {account_name} после {max_complete_attempts} попыток")
                     
                     # Добавляем задержку между заданиями, если это не последний аккаунт и лимит не достигнут
                     if not daily_limit_reached and i < len(follow_accounts) - 1:
