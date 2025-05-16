@@ -3,6 +3,7 @@ from loguru import logger
 import random
 import asyncio
 from website.camp_client import CampNetworkClient
+from typing import  List, Tuple 
 from website.twitter import TwitterClient
 from website.quest_client import QuestClient
 from website.resource_manager import ResourceManager
@@ -94,7 +95,6 @@ async def process_wallet(wallet: User):
     
     # Счетчики ошибок
     proxy_errors = 0
-    twitter_errors = 0
     
     # Для отслеживания необходимости повторной попытки
     retry_with_new_proxy = True
@@ -169,106 +169,81 @@ async def process_wallet(wallet: User):
                             incomplete_quests.append(quest_name)
                             break
             
-            if not incomplete_quests:
+            # Получаем список всех Twitter заданий (подписок)
+            twitter_follow_tasks = []
+            if twitter_enabled:
+                for account_name in settings.twitter_follow_accounts:
+                    quest_id = TwitterClient.TWITTER_QUESTS_MAP.get("Follow", {}).get(account_name)
+                    if quest_id and quest_id not in completed_quests_ids:
+                        twitter_follow_tasks.append(account_name)
+            
+            # Считаем общее количество всех заданий
+            total_tasks = len(incomplete_quests) + len(twitter_follow_tasks)
+            
+            if total_tasks == 0:
                 logger.success(f"{wallet} все задания уже выполнены")
                 return True
             
-            # Перемешиваем список заданий для рандомизации
-            random.shuffle(incomplete_quests)
+            logger.info(f"{wallet} найдено {len(incomplete_quests)} обычных заданий и {len(twitter_follow_tasks)} Twitter заданий для выполнения")
             
             # Получаем настройки задержек для обычных заданий
             regular_min_delay, regular_max_delay = settings.get_quest_delay()
             
             # Выполняем обычные задания
-            logger.info(f"{wallet} выполняю регулярные задания ({len(incomplete_quests)})")
-            
             regular_completed = 0
-            for quest_name in incomplete_quests:
-                try:
-                    logger.info(f"{wallet} выполняю задание {quest_name}")
-                    result = await camp_client.quest_client.complete_quest(quest_name)
-                    
-                    if result:
-                        logger.success(f"{wallet} успешно выполнено задание {quest_name}")
-                        regular_completed += 1
-                    else:
-                        logger.warning(f"{wallet} не удалось выполнить задание {quest_name}")
-                    
-                    # Задержка между заданиями
-                    delay = random.uniform(regular_min_delay, regular_max_delay)
-                    logger.info(f"{wallet} задержка {int(delay)} сек. перед следующим заданием")
-                    await asyncio.sleep(delay)
-                    
-                except Exception as e:
-                    logger.error(f"{wallet} ошибка при выполнении задания {quest_name}: {str(e)}")
-                    
-                    # Проверяем, может быть проблема с прокси
-                    if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
-                        proxy_errors += 1
-                        logger.warning(f"{wallet} возможно проблема с прокси (ошибка {proxy_errors}/{max_failures})")
-                        
-                        # Если достигнут порог ошибок, отмечаем прокси как плохое
-                        if proxy_errors >= max_failures:
-                            await resource_manager.mark_proxy_as_bad(wallet.id)
-                    
-                    await asyncio.sleep(regular_min_delay)  # Минимальная задержка перед следующим заданием
-                    continue
-            
-            # Выполняем Twitter задания, если Twitter включен
-            twitter_completed = False
-            if twitter_enabled:
-                logger.info(f"{wallet} выполняю Twitter задания")
+            if incomplete_quests:
+                logger.info(f"{wallet} выполняю регулярные задания ({len(incomplete_quests)})")
                 
-                try:
-                    # Создаем Twitter клиент для выполнения заданий
-                    twitter_client = TwitterClient(
-                        user=wallet,
-                        auth_client=camp_client.auth_client,
-                        twitter_auth_token=wallet.twitter_token
-                    )
-                    
-                    # Выполняем Twitter задания
-                    twitter_result = await twitter_client.complete_twitter_quests(
-                        follow_accounts=settings.twitter_follow_accounts
-                    )
-                    
-                    twitter_completed = twitter_result
-                    
-                    # Если не удалось выполнить Twitter задания, анализируем причину
-                    if not twitter_result:
-                        twitter_errors += 1
+                # Перемешиваем список заданий для рандомизации
+                random.shuffle(incomplete_quests)
+                
+                for quest_name in incomplete_quests:
+                    try:
+                        logger.info(f"{wallet} выполняю задание {quest_name}")
+                        result = await camp_client.quest_client.complete_quest(quest_name)
                         
-                        # Проверяем сообщение об ошибке, если есть
-                        last_error = getattr(twitter_client, 'last_error', '')
+                        if result:
+                            logger.success(f"{wallet} успешно выполнено задание {quest_name}")
+                            regular_completed += 1
+                        else:
+                            logger.warning(f"{wallet} не удалось выполнить задание {quest_name}")
                         
-                        # Если ошибка связана с авторизацией в Twitter
-                        if last_error and any(x in str(last_error).lower() for x in ["unauthorized", "auth", "token", "login"]):
-                            logger.warning(f"{wallet} проблема с токеном Twitter: {last_error}")
-                            await resource_manager.mark_twitter_as_bad(wallet.id)
+                        # Задержка между заданиями
+                        delay = random.uniform(regular_min_delay, regular_max_delay)
+                        logger.info(f"{wallet} задержка {int(delay)} сек. перед следующим заданием")
+                        await asyncio.sleep(delay)
+                        
+                    except Exception as e:
+                        logger.error(f"{wallet} ошибка при выполнении задания {quest_name}: {str(e)}")
+                        
+                        # Проверяем, может быть проблема с прокси
+                        if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
+                            proxy_errors += 1
+                            logger.warning(f"{wallet} возможно проблема с прокси (ошибка {proxy_errors}/{max_failures})")
                             
-                            # Если включена автозамена, пробуем заменить токен
-                            if auto_replace:
-                                success, message = await resource_manager.replace_twitter(wallet.id)
-                                if success:
-                                    logger.info(f"{wallet} токен Twitter заменен: {message}")
-                                    # Повторное выполнение заданий Twitter не делаем, так как твиты уже отправлены
-                                else:
-                                    logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
-                    
-                except Exception as e:
-                    logger.error(f"{wallet} ошибка при выполнении Twitter заданий: {str(e)}")
-                    
-                    # Проверяем, может быть проблема с токеном Twitter
-                    if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
-                        twitter_errors += 1
-                        logger.warning(f"{wallet} возможно проблема с токеном Twitter (ошибка {twitter_errors}/{max_failures})")
+                            # Если достигнут порог ошибок, отмечаем прокси как плохое
+                            if proxy_errors >= max_failures:
+                                await resource_manager.mark_proxy_as_bad(wallet.id)
                         
-                        # Если достигнут порог ошибок, отмечаем токен как плохой
-                        if twitter_errors >= max_failures:
-                            await resource_manager.mark_twitter_as_bad(wallet.id)
-                    
-                    twitter_completed = False
+                        await asyncio.sleep(regular_min_delay)  # Минимальная задержка перед следующим заданием
+                        continue
+            
+            # Выполняем Twitter задания, если Twitter включен и есть задания
+            twitter_completed_count = 0
+            if twitter_enabled and twitter_follow_tasks:
+                twitter_result, twitter_completed_count = await process_twitter_tasks(
+                    wallet=wallet,
+                    camp_client=camp_client,
+                    resource_manager=resource_manager,
+                    settings=settings,
+                    follow_accounts=twitter_follow_tasks
+                )
                 
+                if twitter_result:
+                    logger.success(f"{wallet} успешно выполнено {twitter_completed_count} из {len(twitter_follow_tasks)} Twitter заданий")
+                else:
+                    logger.warning(f"{wallet} Twitter задания выполнены частично: {twitter_completed_count} из {len(twitter_follow_tasks)}")
+            
             # Получаем список выполненных квестов для проверки
             async with Session() as session:
                 db = DB(session=session)
@@ -276,15 +251,16 @@ async def process_wallet(wallet: User):
                 
             # Подсчитываем количество выполненных заданий
             completed_count = len(final_completed_quests) if final_completed_quests else 0
-            total_count = len(QuestClient.QUEST_IDS)
             
             # Выводим итоговую статистику
-            logger.success(f"{wallet} выполнение заданий завершено. Статус: {completed_count}/{total_count} заданий")
-            logger.info(f"{wallet} успешно выполнено регулярных заданий: {regular_completed}")
-            if twitter_enabled:
-                logger.info(f"{wallet} Twitter задания выполнены: {'Да' if twitter_completed else 'Нет'}")
-                
-            return True
+            total_all_quests = len(QuestClient.QUEST_IDS) + len(TwitterClient.TWITTER_QUESTS_MAP.get("Follow", {}))
+            
+            logger.success(f"{wallet} выполнение заданий завершено. Статус: {completed_count}/{total_all_quests} заданий")
+            logger.info(f"{wallet} успешно выполнено обычных заданий: {regular_completed} из {len(incomplete_quests)}")
+            logger.info(f"{wallet} успешно выполнено Twitter заданий: {twitter_completed_count} из {len(twitter_follow_tasks)}")
+            
+            # Считаем задание успешным, если выполнено хотя бы одно задание
+            return regular_completed > 0 or twitter_completed_count > 0
                 
         except Exception as e:
             logger.error(f"{wallet} ошибка при обработке: {str(e)}")
@@ -321,13 +297,331 @@ async def process_wallet(wallet: User):
     
     return False
 
-async def process_wallet_with_specific_quests(wallet: User, quest_list):
+async def process_twitter_tasks(wallet: User, camp_client, resource_manager, settings, follow_accounts: List[str]) -> Tuple[bool, int]:
+    """
+    Отдельная функция для обработки Twitter заданий с повторными попытками
+    
+    Args:
+        wallet: Объект кошелька
+        camp_client: Клиент CampNetwork
+        resource_manager: Менеджер ресурсов
+        settings: Настройки
+        follow_accounts: Список аккаунтов для подписки
+        
+    Returns:
+        Tuple[success, completed_count]: Статус успеха и количество выполненных заданий
+    """
+    twitter_errors = 0
+    max_failures = settings.resources_max_failures
+    auto_replace = settings.resources_auto_replace
+    max_twitter_retries = 2
+    twitter_retry_count = 0
+    completed_count = 0
+    twitter_min_delay, twitter_max_delay = settings.get_twitter_quest_delay()
+    
+    # Проверка на ограничения Twitter
+    daily_limit_reached = False
+    
+    # Для каждой попытки выполнения Twitter заданий
+    while twitter_retry_count < max_twitter_retries:
+        logger.info(f"{wallet} выполняю Twitter задания (попытка {twitter_retry_count + 1}/{max_twitter_retries})")
+        
+        # Переменная для отслеживания инициализированного клиента
+        twitter_client = None
+        
+        try:
+            # Создаем Twitter клиент
+            twitter_client = TwitterClient(
+                user=wallet,
+                auth_client=camp_client.auth_client,
+                twitter_auth_token=wallet.twitter_token
+            )
+            
+            # ВАЖНО: Инициализируем клиент
+            init_success = await twitter_client.initialize()
+            if not init_success:
+                logger.error(f"{wallet} не удалось инициализировать Twitter клиент")
+                
+                # Добавляем задержку после ошибки
+                error_delay = random.uniform(2, 3)
+                logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                await asyncio.sleep(error_delay)
+                
+                # Если не удалось инициализировать, пробуем заменить токен
+                if auto_replace and twitter_retry_count < max_twitter_retries - 1:
+                    logger.warning(f"{wallet} не удалось инициализировать Twitter клиент, пробуем заменить токен")
+                    
+                    # Отмечаем токен как плохой
+                    await resource_manager.mark_twitter_as_bad(wallet.id)
+                    
+                    success, message = await resource_manager.replace_twitter(wallet.id)
+                    if success:
+                        logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
+                        # Обновляем токен в кошельке
+                        async with Session() as session:
+                            updated_wallet = await session.get(User, wallet.id)
+                            if updated_wallet and updated_wallet.twitter_token:
+                                wallet.twitter_token = updated_wallet.twitter_token
+                                # Увеличиваем счетчик попыток и продолжаем
+                                twitter_retry_count += 1
+                                continue
+                    else:
+                        logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
+                        return False, completed_count
+                else:
+                    logger.error(f"{wallet} не удалось инициализировать Twitter клиент")
+                    return False, completed_count
+            
+            # Проверяем подключение Twitter и переподключаем при необходимости
+            twitter_connected = await twitter_client.check_twitter_connection_status()
+            
+            if not twitter_connected:
+                logger.info(f"{wallet} Twitter не подключен, выполняю подключение")
+                
+                # Подключаем Twitter аккаунт к CampNetwork
+                connect_success = await twitter_client.connect_twitter_to_camp()
+                if not connect_success:
+                    logger.error(f"{wallet} не удалось подключить Twitter к CampNetwork")
+                    
+                    # Добавляем задержку после ошибки
+                    error_delay = random.uniform(2, 3)
+                    logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                    await asyncio.sleep(error_delay)
+                    
+                    # Проверяем, может быть проблема с токеном Twitter
+                    last_error = getattr(twitter_client, 'last_error', '')
+                    if last_error and any(x in str(last_error).lower() for x in ["unauthorized", "auth", "token", "login"]):
+                        logger.warning(f"{wallet} проблема с токеном Twitter: {last_error}")
+                        await resource_manager.mark_twitter_as_bad(wallet.id)
+                        
+                        # Если включена автозамена, пробуем заменить токен
+                        if auto_replace and twitter_retry_count < max_twitter_retries - 1:
+                            success, message = await resource_manager.replace_twitter(wallet.id)
+                            if success:
+                                logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
+                                # Обновляем токен в кошельке
+                                async with Session() as session:
+                                    updated_wallet = await session.get(User, wallet.id)
+                                    if updated_wallet and updated_wallet.twitter_token:
+                                        wallet.twitter_token = updated_wallet.twitter_token
+                                        # Увеличиваем счетчик попыток и продолжаем
+                                        twitter_retry_count += 1
+                                        continue
+                            else:
+                                logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
+                    
+                    return False, completed_count
+            
+            # Если дневной лимит уже достигнут, пропускаем выполнение заданий
+            if daily_limit_reached:
+                logger.warning(f"{wallet} достигнут дневной лимит Twitter, пропускаем оставшиеся задания")
+                # Возвращаем статус частичного успеха, если были выполнены задания
+                return completed_count > 0, completed_count
+            
+            # Обрабатываем каждый аккаунт как отдельное задание
+            for i, account_name in enumerate(follow_accounts):
+                try:
+                    # Получаем ID задания для этого аккаунта
+                    quest_id = TwitterClient.TWITTER_QUESTS_MAP.get("Follow", {}).get(account_name)
+                    if not quest_id:
+                        logger.warning(f"{wallet} нет ID задания для подписки на {account_name}")
+                        continue
+                    
+                    # Проверяем, выполнено ли уже задание в БД
+                    async with Session() as session:
+                        db = DB(session=session)
+                        if await db.is_quest_completed(wallet.id, quest_id):
+                            logger.info(f"{wallet} задание подписки на {account_name} уже выполнено")
+                            completed_count += 1
+                            continue
+                    
+                    logger.info(f"{wallet} выполняю задание подписки на {account_name}")
+                    
+                    # Используем метод follow_account с обработкой ограничений Twitter
+                    follow_success, error_message, already_following = await twitter_client.follow_account(account_name)
+                    
+                    # Обрабатываем случай, когда подписка не удалась и мы не были подписаны ранее
+                    if not follow_success and not already_following:
+                        if error_message:
+                            if "лимит подписок" in error_message or "дневной лимит" in error_message:
+                                logger.warning(f"{wallet} {error_message}")
+                                daily_limit_reached = True
+                                # Прекращаем выполнение остальных заданий
+                                break
+                            else:
+                                logger.error(f"{wallet} ошибка при подписке на {account_name}: {error_message}")
+                                # Добавляем задержку после ошибки
+                                error_delay = random.uniform(2, 3)
+                                logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                                await asyncio.sleep(error_delay)
+                                continue
+                    
+                    # Если подписка успешна или мы уже подписаны, пробуем выполнить задание
+                    if follow_success or already_following:
+                        # Если мы уже подписаны, отмечаем это в логе
+                        if already_following:
+                            logger.info(f"{wallet} уже подписан на {account_name}, пробуем выполнить задание")
+                    
+                        # Отправляем запрос на выполнение задания
+                        complete_url = f"{camp_client.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
+                        
+                        headers = await camp_client.auth_client.get_headers({
+                            'Accept': 'application/json, text/plain, */*',
+                            'Content-Type': 'application/json',
+                            'Origin': 'https://loyalty.campnetwork.xyz',
+                        })
+                        
+                        success, response = await camp_client.auth_client.request(
+                            url=complete_url,
+                            method="POST",
+                            json_data={},
+                            headers=headers
+                        )
+                        
+                        if success:
+                            logger.success(f"{wallet} успешно выполнено задание подписки на {account_name}")
+                            completed_count += 1
+                            
+                            # Отмечаем задание как выполненное в БД
+                            async with Session() as session:
+                                db = DB(session=session)
+                                await db.mark_quest_completed(wallet.id, quest_id)
+                        
+                        elif isinstance(response, dict) and response.get("message") == "You have already been rewarded":
+                            logger.info(f"{wallet} задание подписки на {account_name} уже отмечено как выполненное")
+                            completed_count += 1
+                            
+                            # Отмечаем задание как выполненное в БД
+                            async with Session() as session:
+                                db = DB(session=session)
+                                await db.mark_quest_completed(wallet.id, quest_id)
+                        
+                        else:
+                            logger.error(f"{wallet} ошибка при выполнении задания подписки на {account_name}")
+                            
+                            # Добавляем задержку после ошибки
+                            error_delay = random.uniform(2, 3)
+                            logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                            await asyncio.sleep(error_delay)
+                    
+                    # Добавляем задержку между заданиями, если это не последний аккаунт и лимит не достигнут
+                    if not daily_limit_reached and i < len(follow_accounts) - 1:
+                        delay = random.uniform(twitter_min_delay, twitter_max_delay)
+                        logger.info(f"{wallet} задержка {int(delay)} сек. перед следующей подпиской")
+                        await asyncio.sleep(delay)
+                    
+                except Exception as e:
+                    logger.error(f"{wallet} ошибка при обработке задания для {account_name}: {str(e)}")
+                    
+                    # Добавляем задержку после ошибки
+                    error_delay = random.uniform(2, 3)
+                    logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                    await asyncio.sleep(error_delay)
+                    
+                    # Проверяем на ограничения Twitter
+                    if "limit" in str(e).lower() or "unable to follow" in str(e).lower():
+                        logger.warning(f"{wallet} достигнут лимит Twitter, пропускаем оставшиеся подписки")
+                        daily_limit_reached = True
+                        break
+                    
+                    # Проверяем, может быть проблема с токеном Twitter
+                    if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+                        twitter_errors += 1
+                        logger.warning(f"{wallet} возможно проблема с токеном Twitter (ошибка {twitter_errors}/{max_failures})")
+                        
+                        # Если достигнут порог ошибок, отмечаем токен как плохой
+                        if twitter_errors >= max_failures:
+                            await resource_manager.mark_twitter_as_bad(wallet.id)
+                            
+                            # Если включена автозамена, пробуем заменить токен
+                            if auto_replace and twitter_retry_count < max_twitter_retries - 1:
+                                # Сначала отвязываем текущий Twitter аккаунт
+                                await twitter_client.disconnect_twitter()
+                                
+                                # Затем заменяем токен
+                                success, message = await resource_manager.replace_twitter(wallet.id)
+                                if success:
+                                    logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
+                                    # Обновляем токен в кошельке
+                                    async with Session() as session:
+                                        updated_wallet = await session.get(User, wallet.id)
+                                        if updated_wallet and updated_wallet.twitter_token:
+                                            wallet.twitter_token = updated_wallet.twitter_token
+                                            # Увеличиваем счетчик попыток и прерываем текущий цикл подписок
+                                            twitter_retry_count += 1
+                                            # Закрываем текущий клиент Twitter
+                                            await twitter_client.close()
+                                            # Переходим к следующей попытке с новым токеном
+                                            break
+                                else:
+                                    logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
+            
+            # Закрываем клиент Twitter после обработки всех аккаунтов
+            if twitter_client:
+                await twitter_client.close()
+            
+            # Если был достигнут лимит Twitter или были успешно выполнены все задания, прерываем цикл попыток
+            if daily_limit_reached or completed_count == len(follow_accounts):
+                break
+            
+            # Если был заменен токен и мы перешли к следующей попытке, пропускаем код ниже
+            if twitter_retry_count > 0:
+                continue
+                
+            # Если не было замены токена и не все задания выполнены, но мы прошли по всем аккаунтам,
+            # увеличиваем счетчик попыток для следующей итерации
+            twitter_retry_count += 1
+            
+        except Exception as e:
+            logger.error(f"{wallet} ошибка при выполнении Twitter заданий: {str(e)}")
+            
+            # Добавляем задержку после ошибки
+            error_delay = random.uniform(2, 3)
+            logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+            await asyncio.sleep(error_delay)
+            
+            # Закрываем клиент Twitter, если он был создан
+            if twitter_client:
+                await twitter_client.close()
+            
+            # Проверяем, может быть проблема с токеном Twitter
+            if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+                twitter_errors += 1
+                
+                # Если достигнут порог ошибок, отмечаем токен как плохой
+                if twitter_errors >= max_failures:
+                    await resource_manager.mark_twitter_as_bad(wallet.id)
+                    
+                    # Если включена автозамена, пробуем заменить токен
+                    if auto_replace and twitter_retry_count < max_twitter_retries - 1:
+                        success, message = await resource_manager.replace_twitter(wallet.id)
+                        if success:
+                            logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
+                            # Обновляем токен в кошельке
+                            async with Session() as session:
+                                updated_wallet = await session.get(User, wallet.id)
+                                if updated_wallet and updated_wallet.twitter_token:
+                                    wallet.twitter_token = updated_wallet.twitter_token
+                                    # Увеличиваем счетчик попыток и продолжаем
+                                    twitter_retry_count += 1
+                                    continue
+                        else:
+                            logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
+            
+            # Увеличиваем счетчик попыток
+            twitter_retry_count += 1
+    
+    # Возвращаем статус успеха и количество выполненных заданий
+    return completed_count > 0, completed_count
+
+async def process_wallet_with_specific_quests(wallet: User, quest_list, twitter_follows=None):
     """
     Выполняет указанные задания для одного кошелька с обработкой ошибок ресурсов
     
     Args:
         wallet: Объект кошелька
-        quest_list: Список заданий для выполнения
+        quest_list: Список обычных заданий для выполнения
+        twitter_follows: Список Twitter аккаунтов для подписки (опционально)
         
     Returns:
         Статус успеха
@@ -338,12 +632,15 @@ async def process_wallet_with_specific_quests(wallet: User, quest_list):
     
     # Счетчики ошибок
     proxy_errors = 0
-    twitter_errors = 0
     
     # Для отслеживания необходимости повторной попытки
     retry_with_new_proxy = True
     max_retries = 3
     retry_count = 0
+    
+    # Если twitter_follows не передан, инициализируем пустым списком
+    if twitter_follows is None:
+        twitter_follows = []
     
     while retry_with_new_proxy and retry_count < max_retries:
         try:
@@ -355,7 +652,12 @@ async def process_wallet_with_specific_quests(wallet: User, quest_list):
                         logger.error(f"Не удалось получить обновленные данные кошелька с ID {wallet.id}")
                         return False
             
-            logger.info(f'Начинаю работу с {wallet} для заданий: {", ".join(quest_list)} (попытка {retry_count + 1}/{max_retries})')
+            # Определяем, есть ли Twitter задания для выполнения
+            has_twitter_tasks = "TwitterFollow" in quest_list or twitter_follows
+            
+            logger.info(f'Начинаю работу с {wallet} для заданий: {", ".join(quest_list)} ' +
+                       (f'и Twitter подписок: {len(twitter_follows)}' if twitter_follows else '') +
+                       f' (попытка {retry_count + 1}/{max_retries})')
             
             # Создаем клиент CampNetwork
             camp_client = CampNetworkClient(user=wallet)
@@ -369,6 +671,11 @@ async def process_wallet_with_specific_quests(wallet: User, quest_list):
                 if "proxy" in str(auth_success).lower() or "connection" in str(auth_success).lower():
                     proxy_errors += 1
                     logger.warning(f"{wallet} возможно проблема с прокси (ошибка {proxy_errors}/{max_failures})")
+                    
+                    # Добавляем задержку после ошибки
+                    error_delay = random.uniform(2, 3)
+                    logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                    await asyncio.sleep(error_delay)
                     
                     # Если достигнут порог ошибок, отмечаем прокси как плохое
                     if proxy_errors >= max_failures:
@@ -396,26 +703,38 @@ async def process_wallet_with_specific_quests(wallet: User, quest_list):
             # Проверяем, включен ли Twitter
             twitter_enabled = settings.twitter_enabled and wallet.twitter_token is not None
             
-            # Фильтруем задания на Twitter и обычные
-            twitter_quests = []
+            # Разделяем задания на обычные и Twitter
             regular_quests = []
             
+            # Фильтруем задания для Twitter и обычные
             for quest in quest_list:
-                if quest.startswith("Twitter") and twitter_enabled:
-                    twitter_quests.append(quest)
-                else:
-                    regular_quests.append(quest)
+                if quest != "TwitterFollow":  # Пропускаем общий маркер Twitter задания
+                    # Проверяем, что задание существует и не выполнено
+                    quest_id = QuestClient.QUEST_IDS.get(quest)
+                    if quest_id:
+                        async with Session() as session:
+                            db = DB(session=session)
+                            if not await db.is_quest_completed(wallet.id, quest_id):
+                                regular_quests.append(quest)
+            
+            # Получаем статистику заданий для отображения
+            total_tasks = len(regular_quests) + len(twitter_follows)
+            if total_tasks == 0:
+                logger.success(f"{wallet} все выбранные задания уже выполнены")
+                return True
+                
+            logger.info(f"{wallet} найдено {len(regular_quests)} обычных заданий и {len(twitter_follows)} Twitter заданий для выполнения")
             
             # Получаем настройки задержек
             regular_min_delay, regular_max_delay = settings.get_quest_delay()
             
             # Выполняем обычные задания в случайном порядке
+            regular_completed = 0
             if regular_quests:
                 # Перемешиваем задания для рандомизации
                 random.shuffle(regular_quests)
                 
                 logger.info(f"{wallet} выполняю {len(regular_quests)} регулярных заданий")
-                regular_completed = 0
                 
                 for quest_name in regular_quests:
                     try:
@@ -427,14 +746,25 @@ async def process_wallet_with_specific_quests(wallet: User, quest_list):
                             regular_completed += 1
                         else:
                             logger.warning(f"{wallet} не удалось выполнить задание {quest_name}")
+                            
+                            # Добавляем задержку после ошибки
+                            error_delay = random.uniform(2, 3)
+                            logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                            await asyncio.sleep(error_delay)
                         
                         # Задержка между заданиями
-                        delay = random.uniform(regular_min_delay, regular_max_delay)
-                        logger.info(f"{wallet} задержка {int(delay)} сек. перед следующим заданием")
-                        await asyncio.sleep(delay)
+                        if quest_name != regular_quests[-1]:  # Если это не последнее задание
+                            delay = random.uniform(regular_min_delay, regular_max_delay)
+                            logger.info(f"{wallet} задержка {int(delay)} сек. перед следующим заданием")
+                            await asyncio.sleep(delay)
                         
                     except Exception as e:
                         logger.error(f"{wallet} ошибка при выполнении задания {quest_name}: {str(e)}")
+                        
+                        # Добавляем задержку после ошибки
+                        error_delay = random.uniform(2, 3)
+                        logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+                        await asyncio.sleep(error_delay)
                         
                         # Проверяем, может быть проблема с прокси
                         if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
@@ -449,95 +779,52 @@ async def process_wallet_with_specific_quests(wallet: User, quest_list):
                         continue
             
             # Выполняем Twitter задания, если они есть и Twitter включен
-            twitter_completed = False
-            if twitter_enabled and twitter_quests:
-                logger.info(f"{wallet} выполняю {len(twitter_quests)} Twitter заданий")
+            twitter_completed_count = 0
+            if twitter_enabled and has_twitter_tasks and twitter_follows:
+                # Добавляем задержку перед Twitter заданиями, если были обычные задания
+                if regular_quests:
+                    twitter_delay = random.uniform(regular_min_delay, regular_max_delay)
+                    logger.info(f"{wallet} задержка {int(twitter_delay)} сек. перед началом Twitter заданий")
+                    await asyncio.sleep(twitter_delay)
                 
-                try:
-                    # Создаем Twitter клиент для выполнения заданий
-                    twitter_client = TwitterClient(
-                        user=wallet,
-                        auth_client=camp_client.auth_client,
-                        twitter_auth_token=wallet.twitter_token
-                    )
-                    
-                    # Определяем параметры для разных типов Twitter заданий
-                    follow_needed = any(quest for quest in twitter_quests if "Follow" in quest)
-                    
-                    # Основные параметры для Twitter заданий
-                    follow_accounts = None
-                    
-                    # Настраиваем параметры в зависимости от типа заданий
-                    if follow_needed:
-                        follow_accounts = ACTUAL_FOLLOWS_TWITTER
-                    
-                    
-                    # Выполняем задания Twitter
-                    twitter_result = await twitter_client.complete_twitter_quests(
-                        follow_accounts=follow_accounts,
-                    )
-                    
-                    twitter_completed = twitter_result
-                    
-                    # Если не удалось выполнить Twitter задания, анализируем причину
-                    if not twitter_result:
-                        twitter_errors += 1
-                        
-                        # Проверяем сообщение об ошибке, если есть
-                        last_error = getattr(twitter_client, 'last_error', '')
-                        
-                        # Если ошибка связана с авторизацией в Twitter
-                        if last_error and any(x in str(last_error).lower() for x in ["unauthorized", "auth", "token", "login"]):
-                            logger.warning(f"{wallet} проблема с токеном Twitter: {last_error}")
-                            await resource_manager.mark_twitter_as_bad(wallet.id)
-                            
-                            # Если включена автозамена, пробуем заменить токен
-                            if auto_replace:
-                                success, message = await resource_manager.replace_twitter(wallet.id)
-                                if success:
-                                    logger.info(f"{wallet} токен Twitter заменен: {message}")
-                                    # Повторное выполнение заданий Twitter не делаем, так как твиты уже отправлены
-                                else:
-                                    logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
-                    
-                except Exception as e:
-                    logger.error(f"{wallet} ошибка при выполнении Twitter заданий: {str(e)}")
-                    
-                    # Проверяем, может быть проблема с токеном Twitter
-                    if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
-                        twitter_errors += 1
-                        logger.warning(f"{wallet} возможно проблема с токеном Twitter (ошибка {twitter_errors}/{max_failures})")
-                        
-                        # Если достигнут порог ошибок, отмечаем токен как плохой
-                        if twitter_errors >= max_failures:
-                            await resource_manager.mark_twitter_as_bad(wallet.id)
-                            
-                    # Проверяем, может быть проблема с прокси
-                    if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
-                        proxy_errors += 1
-                        logger.warning(f"{wallet} возможно проблема с прокси (ошибка {proxy_errors}/{max_failures})")
-                        
-                        # Если достигнут порог ошибок, отмечаем прокси как плохое
-                        if proxy_errors >= max_failures:
-                            await resource_manager.mark_proxy_as_bad(wallet.id)
-                    
-                    twitter_completed = False
+                # Выполняем Twitter задания через общую функцию
+                twitter_result, twitter_completed_count = await process_twitter_tasks(
+                    wallet=wallet,
+                    camp_client=camp_client,
+                    resource_manager=resource_manager,
+                    settings=settings,
+                    follow_accounts=twitter_follows
+                )
+                
+                if twitter_result:
+                    logger.success(f"{wallet} успешно выполнено {twitter_completed_count} из {len(twitter_follows)} Twitter заданий")
+                else:
+                    logger.warning(f"{wallet} Twitter задания выполнены частично: {twitter_completed_count} из {len(twitter_follows)}")
             
             # Получаем список выполненных квестов для проверки
             async with Session() as session:
                 db = DB(session=session)
                 final_completed_quests = await db.get_completed_quests(wallet.id)
                 
-            # Подсчитываем количество выполненных заданий
-            completed_count = len(final_completed_quests) if final_completed_quests else 0
-            total_count = len(QuestClient.QUEST_IDS)
+            # Выводим итоговые результаты
+            completed_count = regular_completed + twitter_completed_count
+            total_requested = len(regular_quests) + len(twitter_follows)
             
-            logger.success(f"{wallet} выполнение заданий завершено. Статус: {completed_count}/{total_count} заданий")
+            logger.success(f"{wallet} выполнение заданий завершено. "
+                           f"Выполнено всего: {completed_count}/{total_requested} запрошенных заданий")
+            logger.info(f"{wallet} успешно выполнено обычных заданий: {regular_completed} из {len(regular_quests)}")
+            logger.info(f"{wallet} успешно выполнено Twitter заданий: {twitter_completed_count} из {len(twitter_follows)}")
             
-            return True
+            # Считаем задание успешным, если выполнено хотя бы одно задание
+            return completed_count > 0
                 
         except Exception as e:
             logger.error(f"{wallet} ошибка при обработке: {str(e)}")
+            
+            # Добавляем задержку после ошибки
+            error_delay = random.uniform(2, 3)
+            logger.info(f"{wallet} задержка {error_delay:.1f} сек. после ошибки")
+            await asyncio.sleep(error_delay)
             
             # Проверяем, может быть проблема с прокси
             if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
@@ -654,12 +941,14 @@ async def complete_specific_quests():
         logger.info(f"Найдено {len(all_wallets)} кошельков")
         logger.info(f"Будет обработано {len(wallets)} кошельков (с {wallet_start+1} по {wallet_start+len(wallets)})")
         
-        # Получаем список доступных заданий
+        # Получаем список доступных обычных заданий
         quests = list(QuestClient.QUEST_IDS.keys())
         
-        # Если Twitter включен, добавляем Twitter задания
+        # Добавляем Twitter задания с более понятными названиями
         if settings.twitter_enabled:
-            quests.extend(["TwitterFollow"])
+            twitter_accounts = TwitterClient.TWITTER_QUESTS_MAP.get("Follow", {})
+            for account, quest_id in twitter_accounts.items():
+                quests.append(f"Twitter Follow: @{account}")
         
         print("\n=== Доступные задания ===")
         for i, quest_name in enumerate(quests, 1):
@@ -685,6 +974,21 @@ async def complete_specific_quests():
         
         logger.info(f"Выбраны задания: {', '.join(selected_quests)}")
         
+        # Преобразуем названия Twitter Follow заданий в обычный формат для обработки
+        processed_quests = []
+        twitter_follows = []
+        
+        for quest in selected_quests:
+            if quest.startswith("Twitter Follow: @"):
+                account_name = quest.replace("Twitter Follow: @", "")
+                twitter_follows.append(account_name)
+            else:
+                processed_quests.append(quest)
+        
+        # Если выбраны Twitter задания, добавляем общий маркер TwitterFollow
+        if twitter_follows:
+            processed_quests.append("TwitterFollow")
+        
         # Получаем настройки задержки между запуском аккаунтов
         startup_min, startup_max = settings.get_wallet_startup_delay()
         
@@ -697,7 +1001,7 @@ async def complete_specific_quests():
             await asyncio.sleep(delay)
             
             # Создаем задачу для обработки кошелька
-            task = asyncio.create_task(process_wallet_with_specific_quests(wallet, selected_quests))
+            task = asyncio.create_task(process_wallet_with_specific_quests(wallet, processed_quests, twitter_follows))
             tasks.append(task)
         
         # Если нет задач, выходим

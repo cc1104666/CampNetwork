@@ -1,12 +1,13 @@
 import asyncio
 import random
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Tuple, Tuple, Tuple, Tuple
 from loguru import logger
 import twitter  # Import tweepy-self library
 from twitter.utils import remove_at_sign
 from utils.db_api_async.models import User
 from utils.db_api_async.db_api import Session
 from utils.db_api_async.db_activity import DB
+from website.resource_manager import ResourceManager
 from website.http_client import BaseHttpClient
 from data.config import CAPMONSTER_API_KEY, ACTUAL_UA
 from data.models import Settings
@@ -123,7 +124,6 @@ class TwitterClient(BaseHttpClient):
                 
                 # Если проблема с авторизацией, отмечаем токен как плохой
                 if self.twitter_account.status in [twitter.AccountStatus.BAD_TOKEN, twitter.AccountStatus.SUSPENDED]:
-                    from resource_manager import ResourceManager
                     resource_manager = ResourceManager()
                     await resource_manager.mark_twitter_as_bad(self.user.id)
                     
@@ -145,7 +145,6 @@ class TwitterClient(BaseHttpClient):
             
             # Проверяем, указывает ли ошибка на проблемы с авторизацией
             if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
-                from resource_manager import ResourceManager
                 resource_manager = ResourceManager()
                 await resource_manager.mark_twitter_as_bad(self.user.id)
                 
@@ -327,6 +326,106 @@ class TwitterClient(BaseHttpClient):
             logger.error(f"{self.user} ошибка при подключении Twitter: {str(e)}")
             return False
 
+    async def disconnect_twitter(self) -> bool:
+        """
+        Отвязывает Twitter аккаунт от CampNetwork
+        
+        Returns:
+            Статус успеха
+        """
+        try:
+            # Проверяем, подключен ли Twitter к аккаунту
+            is_connected = await self.check_twitter_connection_status()
+            if not is_connected:
+                logger.info(f"{self.user} Twitter уже отключен")
+                return True
+                
+            # Отправляем запрос на отключение Twitter
+            headers = await self.auth_client.get_headers({
+                'Accept': 'application/json, text/plain, */*',
+                'Origin': 'https://loyalty.campnetwork.xyz',
+                'Referer': 'https://loyalty.campnetwork.xyz/loyalty?editProfile=1&modalTab=social',
+                'Content-Length': '0',
+            })
+            
+            success, response = await self.auth_client.request(
+                url="https://loyalty.campnetwork.xyz/api/twitter/auth/disconnect",
+                method="POST",
+                headers=headers
+            )
+            
+            if success:
+                logger.success(f"{self.user} Twitter успешно отключен")
+                self.is_connected = False
+                return True
+            else:
+                logger.error(f"{self.user} не удалось отключить Twitter: {response}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"{self.user} ошибка при отключении Twitter: {str(e)}")
+            return False
+
+    async def replace_twitter_token(self, new_token: str) -> bool:
+        """
+        Заменяет токен Twitter, отвязывая старый аккаунт и подключая новый
+        
+        Args:
+            new_token: Новый токен авторизации Twitter
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            # Шаг 1: Отвязываем текущий Twitter аккаунт
+            disconnect_success = await self.disconnect_twitter()
+            if not disconnect_success:
+                logger.warning(f"{self.user} не удалось отвязать текущий Twitter аккаунт")
+                # Продолжаем, даже если отвязать не удалось
+            
+            # Шаг 2: Проверяем, что Twitter действительно отвязан
+            is_connected = await self.check_twitter_connection_status()
+            
+            # Если всё ещё подключен после попытки отвязать, делаем еще одну попытку
+            if is_connected:
+                logger.warning(f"{self.user} Twitter всё ещё подключен после попытки отключения, пробуем ещё раз")
+                await asyncio.sleep(2)  # Небольшая задержка
+                await self.disconnect_twitter()
+                
+                # Проверяем еще раз
+                is_connected = await self.check_twitter_connection_status()
+                
+                if is_connected:
+                    logger.error(f"{self.user} не удалось отвязать Twitter аккаунт после повторной попытки")
+                    return False
+            
+            # Шаг 3: Обновляем токен и пересоздаем клиент
+            # Закрываем текущий клиент, если он есть
+            if self.twitter_client:
+                await self.close()
+            
+            # Обновляем токен
+            self.twitter_account.auth_token = new_token
+            
+            # Инициализируем клиент с новым токеном
+            init_success = await self.initialize()
+            if not init_success:
+                logger.error(f"{self.user} не удалось инициализировать Twitter клиент с новым токеном")
+                return False
+            
+            # Шаг 4: Подключаем Twitter к CampNetwork
+            connect_success = await self.connect_twitter_to_camp()
+            if not connect_success:
+                logger.error(f"{self.user} не удалось подключить Twitter с новым токеном")
+                return False
+            
+            logger.success(f"{self.user} успешно заменен токен Twitter и подключен новый аккаунт")
+            return True
+            
+        except Exception as e:
+            logger.error(f"{self.user} ошибка при замене токена Twitter: {str(e)}")
+            return False
+
     async def check_twitter_connection_status(self) -> bool:
         """
         Проверяет, подключен ли Twitter к аккаунту CampNetwork
@@ -382,7 +481,9 @@ class TwitterClient(BaseHttpClient):
             self.is_connected = False
             return False
     
-    async def follow_account(self, account_name: str) -> bool:
+    
+
+    async def follow_account(self, account_name: str) -> Tuple[bool, Optional[str], bool]:
         """
         Подписывается на указанный аккаунт в Twitter
         
@@ -390,11 +491,16 @@ class TwitterClient(BaseHttpClient):
             account_name: Имя аккаунта для подписки (с @ или без)
             
         Returns:
-            Статус успеха
+            Tuple[success, error_message, already_following]: 
+            - Статус успеха
+            - Сообщение об ошибке (если есть)
+            - Флаг, который указывает, были ли мы уже подписаны
         """
+        already_following = False
+        
         if not self.twitter_client:
             logger.error(f"{self.user} попытка выполнить действие без инициализации клиента")
-            return False
+            return False, "Клиент Twitter не инициализирован", False
             
         try:
             # Убираем @ из имени аккаунта, если он есть
@@ -405,22 +511,75 @@ class TwitterClient(BaseHttpClient):
             
             if not user:
                 logger.error(f"{self.user} не удалось найти пользователя @{clean_account_name}")
-                return False
+                return False, f"Пользователь @{clean_account_name} не найден", False
+                
+            # Проверяем, подписаны ли мы уже на этого пользователя
+            is_following = await self._check_if_following(user.id)
+            if is_following:
+                logger.info(f"{self.user} уже подписан на @{clean_account_name}")
+                return True, None, True  # Возвращаем флаг already_following=True
                 
             # Подписываемся на пользователя
-            is_followed = await self.twitter_client.follow(user.id)
-            
-            if is_followed:
-                logger.success(f"{self.user} подписался на @{clean_account_name}")
-                return True
-            else:
-                logger.warning(f"{self.user} не удалось подписаться на @{clean_account_name}")
-                return False
+            try:
+                is_followed = await self.twitter_client.follow(user.id)
                 
+                if is_followed:
+                    logger.success(f"{self.user} подписался на @{clean_account_name}")
+                    return True, None, False
+                else:
+                    logger.warning(f"{self.user} не удалось подписаться на @{clean_account_name}")
+                    return False, "Ошибка подписки", False
+            except Exception as e:
+                error_msg = str(e)
+                
+                    
+                # Код 161 - достигнут лимит подписок
+                if "unable to follow more people" in error_msg.lower():
+                    logger.warning(f"{self.user} достигнут лимит подписок в Twitter. Попробуйте завтра.")
+                    return False, "Достигнут лимит подписок. Попробуйте завтра.", False
+                
+                # Код 344 - достигнут дневной лимит действий
+                elif "daily limit" in error_msg.lower():
+                    logger.warning(f"{self.user} достигнут дневной лимит действий в Twitter. Попробуйте завтра.")
+                    return False, "Достигнут дневной лимит действий. Попробуйте завтра.", False
+                
+                logger.error(f"{self.user} ошибка при подписке на @{clean_account_name}: {error_msg}")
+                return False, error_msg, False
+                    
         except Exception as e:
-            logger.error(f"{self.user} ошибка при подписке на @{account_name}: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"{self.user} ошибка при подписке на @{account_name}: {error_msg}")
+            return False, error_msg, False
+
+    async def _check_if_following(self, user_id: int) -> bool:
+        """
+        Проверяет, подписан ли текущий пользователь на указанного пользователя
+        
+        Args:
+            user_id: ID пользователя для проверки
+            
+        Returns:
+            True если уже подписан, False в противном случае
+        """
+        try:
+            # Получаем ID текущего пользователя Twitter
+            
+            try:
+                following = await self.twitter_client.request_followings()
+                print(following)
+                if following:
+                    for followed_user in following:
+                        if str(followed_user.id) == str(user_id):
+                            return True
+            except Exception as e:
+                # Если этот метод не сработал, полагаемся на результат friendship
+                logger.warning(f"{self.user} не удалось получить список подписок: {str(e)}")
+                
             return False
-    
+        except Exception as e:
+            logger.error(f"{self.user} ошибка при проверке подписки: {str(e)}")
+            return False
+
     async def post_tweet(self, text: str) -> Optional[Any]:
         """
         Публикует твит с указанным текстом
@@ -535,18 +694,28 @@ class TwitterClient(BaseHttpClient):
             logger.error(f"{self.user} ошибка при проверке задания: {str(e)}")
         
         # Выполняем подписку
-        follow_success = await self.follow_account(account_name)
+        follow_success, error_message = await self.follow_account(account_name)
+        
+        # Если подписаться не удалось, но это из-за лимитов Twitter - логируем информацию
         if not follow_success:
-            logger.error(f"{self.user} не удалось подписаться на {account_name}")
-            return False
+            if error_message and ("лимит подписок" in error_message or "дневной лимит" in error_message):
+                logger.warning(f"{self.user} {error_message} Пропускаем задание подписки на {account_name}")
+                return False
+            else:
+                logger.error(f"{self.user} не удалось подписаться на {account_name}")
+                return False
         
         # Отправляем запрос на выполнение задания
         try:
             complete_url = f"{self.BASE_URL}/api/loyalty/rules/{quest_id}/complete"
             
             headers = await self.auth_client.get_headers({
+                'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json',
                 'Origin': 'https://loyalty.campnetwork.xyz',
+                'DNT': '1',
+                'Sec-GPC': '1',
+                'Priority': 'u=0',
             })
             
             success, response = await self.auth_client.request(
@@ -638,13 +807,16 @@ class TwitterClient(BaseHttpClient):
         success_count = 0
         total_tasks = 0
         
+        # Для отслеживания ограничений Twitter
+        twitter_rate_limited = False
+        rate_limit_message = ""
+        
         try:
             # Инициализируем клиент
             if not await self.initialize():
                 # Если инициализация не удалась и у нас есть последняя ошибка, проверяем,
                 # можно ли заменить токен автоматически
                 if self.last_error and auto_replace:
-                    from resource_manager import ResourceManager
                     resource_manager = ResourceManager()
                     success, message = await resource_manager.replace_twitter(self.user.id)
                     
@@ -654,11 +826,19 @@ class TwitterClient(BaseHttpClient):
                         async with Session() as session:
                             updated_wallet = await session.get(User, self.user.id)
                             if updated_wallet and updated_wallet.twitter_token:
+                                # Отвязываем текущий аккаунт Twitter и подключаем новый
+                                await self.disconnect_twitter()
                                 # Обновляем токен в текущем экземпляре
                                 self.twitter_account.auth_token = updated_wallet.twitter_token
                                 # Пробуем снова инициализировать
                                 if await self.initialize():
-                                    logger.success(f"{self.user} успешная реинициализация с новым токеном Twitter")
+                                    # Подключаем Twitter к CampNetwork
+                                    connect_success = await self.connect_twitter_to_camp()
+                                    if connect_success:
+                                        logger.success(f"{self.user} успешная реинициализация с новым токеном Twitter")
+                                    else:
+                                        logger.error(f"{self.user} не удалось подключить Twitter с новым токеном")
+                                        return False
                                 else:
                                     logger.error(f"{self.user} не удалось инициализировать с новым токеном Twitter")
                                     return False
@@ -697,9 +877,32 @@ class TwitterClient(BaseHttpClient):
             # Выполняем задания
             for i, task_type in enumerate(task_types):
                 try:
+                    # Если уже достигнут лимит Twitter, пропускаем оставшиеся задания
+                    if twitter_rate_limited:
+                        logger.warning(f"{self.user} пропускаем задание {task_type} из-за ограничений Twitter: {rate_limit_message}")
+                        continue
+                    
                     if task_type == "follow" and follow_accounts:
                         # Выполняем подписки
-                        follow_results = await self.complete_follow_quests(follow_accounts)
+                        follow_results = {}
+                        for account in follow_accounts:
+                            follow_success, error_message = await self.follow_account(account)
+                            follow_results[account] = follow_success
+                            
+                            # Проверяем, не достигнут ли лимит подписок
+                            if not follow_success and error_message and (
+                                "лимит подписок" in error_message or 
+                                "дневной лимит" in error_message
+                            ):
+                                twitter_rate_limited = True
+                                rate_limit_message = error_message
+                                logger.warning(f"{self.user} {error_message} Пропускаем оставшиеся подписки")
+                                break
+                                
+                            # Добавляем задержку между подписками
+                            if len(follow_accounts) > 1 and account != follow_accounts[-1]:
+                                await asyncio.sleep(random.uniform(min_delay/2, max_delay/2))
+                        
                         if any(follow_results.values()):
                             success_count += 1
                     
@@ -724,14 +927,18 @@ class TwitterClient(BaseHttpClient):
                     self.last_error = error_msg
                     self.error_count += 1
                     
+                    # Проверяем на ограничения Twitter
+                    if "limit" in str(e).lower() or "unable to follow" in str(e).lower():
+                        twitter_rate_limited = True
+                        rate_limit_message = f"Достигнут лимит Twitter в задании {task_type}"
+                        logger.warning(f"{self.user} {rate_limit_message}")
+                    
                     # Проверяем, указывает ли ошибка на проблемы с авторизацией или прокси
                     if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
-                        from resource_manager import ResourceManager
                         resource_manager = ResourceManager()
                         await resource_manager.mark_twitter_as_bad(self.user.id)
                     
                     if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
-                        from resource_manager import ResourceManager
                         resource_manager = ResourceManager()
                         
                         # Если достигнут порог ошибок, отмечаем прокси как плохое
@@ -739,13 +946,25 @@ class TwitterClient(BaseHttpClient):
                             await resource_manager.mark_proxy_as_bad(self.user.id)
                 
                 # Добавляем задержку между заданиями, если это не последнее задание
-                if i < len(task_types) - 1:
+                if i < len(task_types) - 1 and not twitter_rate_limited:
                     delay = random.uniform(min_delay, max_delay)
                     logger.info(f"{self.user} задержка {int(delay)} сек. перед следующим Twitter заданием")
                     await asyncio.sleep(delay)
             
             # Закрываем клиент Twitter
             await self.close()
+            
+            # Если были достигнуты лимиты Twitter, выводим информативное сообщение
+            if twitter_rate_limited:
+                logger.warning(f"{self.user} некоторые Twitter задания не выполнены из-за ограничений: {rate_limit_message}. Попробуйте завтра.")
+                
+                # Если хотя бы одно задание было выполнено, то считаем успехом
+                if success_count > 0:
+                    logger.success(f"{self.user} частично выполнены Twitter задания: {success_count} из {total_tasks}")
+                    return True
+                else:
+                    logger.warning(f"{self.user} не удалось выполнить ни одного Twitter задания из-за ограничений")
+                    return False
             
             # Возвращаем успех, если хотя бы одно задание выполнено
             success = success_count > 0
@@ -766,7 +985,6 @@ class TwitterClient(BaseHttpClient):
             
             # Проверяем, может быть проблема с прокси
             if "proxy" in str(e).lower() or "connection" in str(e).lower() or "timeout" in str(e).lower():
-                from resource_manager import ResourceManager
                 resource_manager = ResourceManager()
                 
                 # Если достигнут порог ошибок, отмечаем прокси как плохое
@@ -775,7 +993,6 @@ class TwitterClient(BaseHttpClient):
             
             # Проверяем, может быть проблема с токеном Twitter
             if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
-                from resource_manager import ResourceManager
                 resource_manager = ResourceManager()
                 await resource_manager.mark_twitter_as_bad(self.user.id)
                 

@@ -454,5 +454,5 @@ if __name__ == "__main__":
         # Запускаем программу
         asyncio.run(main())
     except KeyboardInterrupt:
-        console.print("\n[bold cyan]Программа прервана пользователем. До свидания![/]")
+        console.print("\n[bold cyan]Программа завершена![/]")
         sys.exit(0)

@@ -4,6 +4,7 @@ import json
 import aiohttp
 from typing import Dict, Tuple, Union, Optional
 from loguru import logger
+from website.captcha_handler import CloudflareHandler
 from utils.db_api_async.db_api import Session
 from utils.db_api_async.models import User
 from data.config import ACTUAL_UA
@@ -30,7 +31,6 @@ class BaseHttpClient:
         self.settings = Settings()
         self.max_proxy_errors = self.settings.resources_max_failures
         # Инициализируем обработчик Cloudflare
-        from website.captcha_handler import CloudflareHandler
         self.cloudflare_handler = CloudflareHandler(self)
         # Время последнего решения капчи
         self.last_captcha_time = None
