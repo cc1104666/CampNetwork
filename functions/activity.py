@@ -101,6 +101,10 @@ async def process_wallet(wallet: User):
     max_retries = 3
     retry_count = 0
     
+    startup_min, startup_max = settings.get_wallet_startup_delay()
+    delay = random.uniform(startup_min, startup_max)
+    logger.info(f"Запуск кошелька {wallet}) через {int(delay)} сек.")
+    await asyncio.sleep(delay)
     while retry_with_new_proxy and retry_count < max_retries:
         try:
             # Если это повторная попытка с новым прокси, обновляем данные о кошельке
@@ -638,6 +642,10 @@ async def process_wallet_with_specific_quests(wallet: User, quest_list, twitter_
     max_retries = 3
     retry_count = 0
     
+    startup_min, startup_max = settings.get_wallet_startup_delay()
+    delay = random.uniform(startup_min, startup_max)
+    logger.info(f"Запуск кошелька {wallet} через {int(delay)} сек.")
+    await asyncio.sleep(delay)
     # Если twitter_follows не передан, инициализируем пустым списком
     if twitter_follows is None:
         twitter_follows = []
@@ -885,15 +893,11 @@ async def complete_all_wallets_quests():
         random.shuffle(wallets)
         
         # Получаем настройки задержки между запуском аккаунтов
-        startup_min, startup_max = settings.get_wallet_startup_delay()
         
         # Создаем задачи для всех кошельков
         tasks = []
         for i, wallet in enumerate(wallets):
             # Добавляем случайную задержку между запуском обработки кошельков
-            delay = random.uniform(startup_min, startup_max)
-            logger.info(f"Запуск кошелька {wallet} ({i+1}/{len(wallets)}) через {int(delay)} сек.")
-            await asyncio.sleep(delay)
             
             # Создаем задачу для обработки кошелька
             task = asyncio.create_task(process_wallet(wallet))
@@ -990,15 +994,11 @@ async def complete_specific_quests():
             processed_quests.append("TwitterFollow")
         
         # Получаем настройки задержки между запуском аккаунтов
-        startup_min, startup_max = settings.get_wallet_startup_delay()
         
         # Создаем задачи для всех кошельков
         tasks = []
         for i, wallet in enumerate(wallets):
             # Добавляем случайную задержку между запуском обработки кошельков
-            delay = random.uniform(startup_min, startup_max)
-            logger.info(f"Запуск кошелька {wallet} ({i+1}/{len(wallets)}) через {int(delay)} сек.")
-            await asyncio.sleep(delay)
             
             # Создаем задачу для обработки кошелька
             task = asyncio.create_task(process_wallet_with_specific_quests(wallet, processed_quests, twitter_follows))
