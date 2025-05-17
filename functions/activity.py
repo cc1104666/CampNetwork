@@ -326,6 +326,7 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
     
     # Проверка на ограничения Twitter
     daily_limit_reached = False
+    random.shuffle(follow_accounts)
     
     # Для каждой попытки выполнения Twitter заданий
     while twitter_retry_count < max_twitter_retries:
