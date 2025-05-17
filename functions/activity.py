@@ -319,7 +319,7 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
     twitter_errors = 0
     max_failures = settings.resources_max_failures
     auto_replace = settings.resources_auto_replace
-    max_twitter_retries = 2
+    max_twitter_retries = 4
     twitter_retry_count = 0
     completed_count = 0
     twitter_min_delay, twitter_max_delay = settings.get_twitter_quest_delay()
@@ -373,9 +373,11 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                                 continue
                     else:
                         logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
+                        await resource_manager.mark_twitter_as_bad(wallet.id)
                         return False, completed_count
                 else:
                     logger.error(f"{wallet} не удалось инициализировать Twitter клиент")
+                    await resource_manager.mark_twitter_as_bad(wallet.id)
                     return False, completed_count
             
             # Проверяем подключение Twitter и переподключаем при необходимости
