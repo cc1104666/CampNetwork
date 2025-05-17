@@ -354,7 +354,7 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                 await asyncio.sleep(error_delay)
                 
                 # Если не удалось инициализировать, пробуем заменить токен
-                if auto_replace and twitter_retry_count < max_twitter_retries - 1:
+                if auto_replace and twitter_retry_count < max_failures:
                     logger.warning(f"{wallet} не удалось инициализировать Twitter клиент, пробуем заменить токен")
                     
                     # Отмечаем токен как плохой
