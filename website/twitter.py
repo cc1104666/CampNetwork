@@ -216,9 +216,9 @@ class TwitterClient(BaseHttpClient):
             )
             
             # Проверяем, получили ли мы ответ с редиректом
-            if 'Location' in auth_response:
+            if 'location' in auth_response:
                 # Извлекаем URL из Location header
-                twitter_auth_url = auth_response['Location']
+                twitter_auth_url = auth_response['location']
                 
                 # Парсим URL для извлечения параметров
                 import urllib.parse
@@ -275,8 +275,8 @@ class TwitterClient(BaseHttpClient):
                 )
                 
                 # Проверяем, получили ли мы редирект на connect URL
-                if not callback_success and isinstance(callback_response, dict) and 'Location' in callback_response:
-                    connect_url = callback_response['Location']
+                if not callback_success and isinstance(callback_response, dict) and 'location' in callback_response:
+                    connect_url = callback_response['location']
                     
                     # Шаг 4: Выполняем запрос на подключение Twitter
                     connect_headers = await self.auth_client.get_headers({
@@ -309,7 +309,7 @@ class TwitterClient(BaseHttpClient):
                         return True
                     else:
                         # Проверяем, получили ли мы редирект на основную страницу
-                        if isinstance(connect_response, dict) and 'Location' in connect_response and 'loyalty.campnetwork.xyz/loyalty' in connect_response['Location']:
+                        if isinstance(connect_response, dict) and 'location' in connect_response and 'loyalty.campnetwork.xyz/loyalty' in connect_response['location']:
                             logger.success(f"{self.user} Twitter подключен (через редирект)")
                             self.is_connected = True
                             return True
