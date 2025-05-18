@@ -1,3 +1,5 @@
+from curl_cffi.requests import AsyncSession
+from curl_cffi import CurlError
 import asyncio
 import random
 import json
@@ -173,148 +175,131 @@ class BaseHttpClient:
         
         # Выполняем запрос с повторными попытками
         for attempt in range(retries):
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with getattr(session, method.lower())(**request_kwargs) as resp:
-                        # Сохраняем cookies из ответа
-                        if resp.cookies:
-                            for name, cookie in resp.cookies.items():
-                                self.cookies[name] = cookie.value
-                        
-                        if 300 <= resp.status < 400 and not allow_redirects:
-                            headers_dict = dict(resp.headers)
-                            return False, headers_dict  # Возвращаем заголовки вместо тела ответа
-                            
-                        # Успешный ответ
-                        if resp.status == 200 or resp.status == 202:
-                            # Сбрасываем счетчик ошибок прокси при успешном запросе
-                            self.proxy_errors = 0
-                            self.captcha_errors = 0
-                            try:
-                                json_resp = await resp.json()
-                                return True, json_resp
-                            except Exception:
-                                return True, await resp.text()
-                        
-                        # Получаем текст ответа для анализа
-                        response_text = await resp.text()
-                        
-                        # Проверяем наличие Cloudflare защиты в ответе
-                        if check_cloudflare and (
-                            "Just a moment" in response_text 
-                        ):
-                            logger.warning(f"{self.user} обнаружена Cloudflare защита, попытка решения капчи...")
-                            captcha_error_occurred = True
-                            
-                            # Решаем капчу
-                            captcha_solved = await self.handle_captcha_if_needed(url, response_text)
-                            
-                            if captcha_solved:
-                                # Если капча решена успешно, повторяем запрос
-                                continue
-                            else:
-                                self.captcha_errors += 1
-                                if self.captcha_errors >= 3:
-                                    logger.error(f"{self.user} не удалось решить капчу после {self.captcha_errors} попыток")
-                                    return False, "CAPTCHA_FAILED"
-                                    
-                                # Делаем паузу перед следующей попыткой
-                                await asyncio.sleep(2 ** attempt)
-                                continue
-                        
-                        # Обработка ошибок
-                        if 400 <= resp.status < 500:
-                            logger.warning(f"{self.user} получен статус {resp.status} при запросе {url}")
-                            
-                            # Проверяем, может быть проблема с авторизацией
-                            if resp.status == 401 or resp.status == 403:
-                                if "!DOCTYPE" not in response_text:
-                                    logger.error(f"{self.user} ошибка авторизации: {response_text}")
-                                return False, response_text
-                            
-                            # Проверяем на ограничение запросов
-                            if resp.status == 429:
-                                logger.warning(f"{self.user} превышен лимит запросов (429)")
+                    try:
+                        async with AsyncSession(impersonate="chrome") as session:
+                                resp = await getattr(session, method.lower())(**request_kwargs)
+                                # Сохраняем cookies из ответа
+                                if resp.cookies:
+                                    for name, cookie in resp.cookies.items():
+                                        self.cookies[name] = cookie
                                 
-                                # Если это не последняя попытка, делаем большую задержку и пробуем снова
-                                if attempt < retries - 1:
-                                    wait_time = random.uniform(10, 30)  # 10-30 секунд
-                                    logger.info(f"{self.user} ожидание {int(wait_time)} секунд перед следующей попыткой")
-                                    await asyncio.sleep(wait_time)
+                                if 300 <= resp.status_code < 400 and not allow_redirects:
+                                    headers_dict = dict(resp.headers)
+                                    return False, headers_dict  # Возвращаем заголовки вместо тела ответа
+                                    
+                                # Успешный ответ
+                                if resp.status_code == 200 or resp.status_code == 202:
+                                    # Сбрасываем счетчик ошибок прокси при успешном запросе
+                                    self.proxy_errors = 0
+                                    self.captcha_errors = 0
+                                    try:
+                                        json_resp = resp.json()
+                                        return True, json_resp
+                                    except Exception:
+                                        return True, resp.text
+                                
+                                # Получаем текст ответа для анализа
+                                response_text = resp.text
+                                
+                                # Проверяем наличие Cloudflare защиты в ответе
+                                if check_cloudflare and (
+                                    "Just a moment" in response_text 
+                                ):
+                                    logger.warning(f"{self.user} обнаружена Cloudflare защита, попытка решения капчи...")
+                                    captcha_error_occurred = True
+                                    
+                                    # Решаем капчу
+                                    captcha_solved = await self.handle_captcha_if_needed(url, response_text)
+                                    
+                                    if captcha_solved:
+                                        # Если капча решена успешно, повторяем запрос
+                                        continue
+                                    else:
+                                        self.captcha_errors += 1
+                                        if self.captcha_errors >= 3:
+                                            logger.error(f"{self.user} не удалось решить капчу после {self.captcha_errors} попыток")
+                                            return False, "CAPTCHA_FAILED"
+                                            
+                                        # Делаем паузу перед следующей попыткой
+                                        await asyncio.sleep(2 ** attempt)
+                                        continue
+                                
+                                # Обработка ошибок
+                                if 400 <= resp.status_code < 500:
+                                    logger.warning(f"{self.user} получен статус {resp.status_code} при запросе {url}")
+                                    
+                                    # Проверяем, может быть проблема с авторизацией
+                                    if resp.status_code == 401 or resp.status_code == 403:
+                                        if "!DOCTYPE" not in response_text:
+                                            logger.error(f"{self.user} ошибка авторизации: {response_text}")
+                                        return False, response_text
+                                    
+                                    # Проверяем на ограничение запросов
+                                    if resp.status_code == 429:
+                                        logger.warning(f"{self.user} превышен лимит запросов (429)")
+                                        
+                                        # Если это не последняя попытка, делаем большую задержку и пробуем снова
+                                        if attempt < retries - 1:
+                                            wait_time = random.uniform(10, 30)  # 10-30 секунд
+                                            logger.info(f"{self.user} ожидание {int(wait_time)} секунд перед следующей попыткой")
+                                            await asyncio.sleep(wait_time)
+                                            continue
+                                        
+                                        # Парсим ответ, чтобы получить возможный JSON с сообщением об ошибке
+                                        try:
+                                            error_json = json.loads(response_text)
+                                            return False, error_json
+                                        except:
+                                            return False, "RATE_LIMIT"
+                                            
+                                    # Парсим ответ, чтобы получить возможный JSON с сообщением об ошибке
+                                    try:
+                                        error_json = json.loads(response_text)
+                                        return False, error_json
+                                    except:
+                                        return False, response_text
+                                        
+                                elif 500 <= resp.status_code < 600:
+                                    logger.warning(f"{self.user} получен статус {resp.status_code}, повторная попытка {attempt+1}/{retries}")
+                                    await asyncio.sleep(2 ** attempt)  # Экспоненциальная задержка
                                     continue
                                 
-                                # Парсим ответ, чтобы получить возможный JSON с сообщением об ошибке
-                                try:
-                                    error_json = json.loads(response_text)
-                                    return False, error_json
-                                except:
-                                    return False, "RATE_LIMIT"
-                                    
-                            # Парсим ответ, чтобы получить возможный JSON с сообщением об ошибке
-                            try:
-                                error_json = json.loads(response_text)
-                                return False, error_json
-                            except:
                                 return False, response_text
                                 
-                        elif 500 <= resp.status < 600:
-                            logger.warning(f"{self.user} получен статус {resp.status}, повторная попытка {attempt+1}/{retries}")
-                            await asyncio.sleep(2 ** attempt)  # Экспоненциальная задержка
-                            continue
+                    except (CurlError) as e:
+                        logger.warning(f"{self.user} ошибка соединения при запросе {url}: {str(e)}")
                         
-                        return False, response_text
+                        # Увеличиваем счетчик ошибок прокси
+                        if "proxy" in str(e).lower() or "connection" in str(e).lower():
+                            self.proxy_errors += 1
+                            proxy_error_occurred = True
+                            
+                            # Если превышен лимит ошибок, отмечаем прокси как плохое
+                            if self.proxy_errors >= self.max_proxy_errors:
+                                logger.warning(f"{self.user} превышен лимит ошибок прокси ({self.proxy_errors}/{self.max_proxy_errors}), отмечаем как BAD")
+                                from resource_manager import ResourceManager
+                                resource_manager = ResourceManager()
+                                await resource_manager.mark_proxy_as_bad(self.user.id)
+                                
+                                # Если включена автозамена, пробуем заменить прокси
+                                if self.settings.resources_auto_replace:
+                                    success, message = await resource_manager.replace_proxy(self.user.id)
+                                    if success:
+                                        logger.info(f"{self.user} прокси заменено автоматически: {message}")
+                                        # Обновляем прокси для текущего клиента
+                                        async with Session() as session:
+                                            updated_user = await session.get(User, self.user.id)
+                                            if updated_user:
+                                                self.user.proxy = updated_user.proxy
+                                                # Обновляем прокси в параметрах запроса
+                                                request_kwargs['proxy'] = self.user.proxy
+                                                # Сбрасываем счетчик ошибок
+                                                self.proxy_errors = 0
+                                    else:
+                                        logger.error(f"{self.user} не удалось заменить прокси: {message}")
                         
-            except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as e:
-                logger.warning(f"{self.user} ошибка соединения при запросе {url}: {str(e)}")
-                
-                # Увеличиваем счетчик ошибок прокси
-                if "proxy" in str(e).lower() or "connection" in str(e).lower():
-                    self.proxy_errors += 1
-                    proxy_error_occurred = True
-                    
-                    # Если превышен лимит ошибок, отмечаем прокси как плохое
-                    if self.proxy_errors >= self.max_proxy_errors:
-                        logger.warning(f"{self.user} превышен лимит ошибок прокси ({self.proxy_errors}/{self.max_proxy_errors}), отмечаем как BAD")
-                        from resource_manager import ResourceManager
-                        resource_manager = ResourceManager()
-                        await resource_manager.mark_proxy_as_bad(self.user.id)
-                        
-                        # Если включена автозамена, пробуем заменить прокси
-                        if self.settings.resources_auto_replace:
-                            success, message = await resource_manager.replace_proxy(self.user.id)
-                            if success:
-                                logger.info(f"{self.user} прокси заменено автоматически: {message}")
-                                # Обновляем прокси для текущего клиента
-                                async with Session() as session:
-                                    updated_user = await session.get(User, self.user.id)
-                                    if updated_user:
-                                        self.user.proxy = updated_user.proxy
-                                        # Обновляем прокси в параметрах запроса
-                                        request_kwargs['proxy'] = self.user.proxy
-                                        # Сбрасываем счетчик ошибок
-                                        self.proxy_errors = 0
-                            else:
-                                logger.error(f"{self.user} не удалось заменить прокси: {message}")
-                
-                await asyncio.sleep(2 ** attempt)  # Экспоненциальная задержка
-                continue
-            except Exception as e:
-                logger.error(f"{self.user} неожиданная ошибка при запросе {url}: {str(e)}")
-                return False, str(e)
-                
-        # Если все попытки исчерпаны
-        if proxy_error_occurred:
-            # Даже если не превышен лимит ошибок, но все попытки исчерпаны,
-            # отмечаем прокси как потенциально проблемное
-            if self.proxy_errors > 0 and self.proxy_errors < self.max_proxy_errors:
-                logger.warning(f"{self.user} все попытки запроса исчерпаны с ошибками прокси ({self.proxy_errors}/{self.max_proxy_errors})")
-                if self.user.proxy_status != "BAD":
-                    # Увеличиваем счетчик ошибок для прокси
-                    self.proxy_errors += 1
-        
-        if captcha_error_occurred:
-            logger.error(f"{self.user} не удалось решить Cloudflare капчу после всех попыток")
-            return False, "CAPTCHA_FAILED"
-            
-        logger.error(f"{self.user} исчерпаны все попытки запроса {url}")
-        return False, "MAX_RETRIES_EXCEEDED"
+                        await asyncio.sleep(2 ** attempt)  # Экспоненциальная задержка
+                        continue
+                    except Exception as e:
+                        logger.error(f"{self.user} неожиданная ошибка при запросе {url}: {str(e)}")
+                        return False, str(e)
