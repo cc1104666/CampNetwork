@@ -144,16 +144,16 @@ class TwitterClient(BaseHttpClient):
             self.error_count += 1
             
             # Проверяем, указывает ли ошибка на проблемы с авторизацией
-            if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
-                resource_manager = ResourceManager()
-                await resource_manager.mark_twitter_as_bad(self.user.id)
-                
-                # Если включена автозамена, пробуем заменить токен
-                auto_replace, _ = self.settings.get_resource_settings()
-                if auto_replace:
-                    success, message = await resource_manager.replace_twitter(self.user.id)
-                    if success:
-                        logger.info(f"{self.user} токен Twitter автоматически заменен: {message}")
+            # if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+            resource_manager = ResourceManager()
+            await resource_manager.mark_twitter_as_bad(self.user.id)
+            
+            # Если включена автозамена, пробуем заменить токен
+            auto_replace, _ = self.settings.get_resource_settings()
+            if auto_replace:
+                success, message = await resource_manager.replace_twitter(self.user.id)
+                if success:
+                    logger.info(f"{self.user} токен Twitter автоматически заменен: {message}")
                         # Пробуем с новым токеном (в другом методе)
                 
             return False

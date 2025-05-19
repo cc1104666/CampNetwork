@@ -304,7 +304,7 @@ async def process_wallet(wallet: User):
 
 async def process_twitter_tasks(wallet: User, camp_client, resource_manager, settings, follow_accounts: List[str]) -> Tuple[bool, int]:
     """
-    Отдельная функция для обработки Twitter заданий с повторными попытками
+    Отдельная функция для обработки Twitter заданий с повторными попытками и правильной заменой токенов
     
     Args:
         wallet: Объект кошелька
@@ -362,15 +362,25 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                     
                     success, message = await resource_manager.replace_twitter(wallet.id)
                     if success:
-                        logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
-                        # Обновляем токен в кошельке
+                        logger.info(f"{wallet} токен Twitter заменен в БД: {message}")
+                        
+                        # Обновляем токен в кошельке из БД
                         async with Session() as session:
                             updated_wallet = await session.get(User, wallet.id)
                             if updated_wallet and updated_wallet.twitter_token:
-                                wallet.twitter_token = updated_wallet.twitter_token
-                                # Увеличиваем счетчик попыток и продолжаем
-                                twitter_retry_count += 1
-                                continue
+                                # Используем функцию замены токена
+                                replace_success = await twitter_client.replace_twitter_token(updated_wallet.twitter_token)
+                                if replace_success:
+                                    logger.success(f"{wallet} успешно заменен токен Twitter на сайте")
+                                    wallet.twitter_token = updated_wallet.twitter_token
+                                    # Прерываем текущий цикл попыток подключения
+                                    twitter_retry_count += 1
+                                    continue
+                                else:
+                                    logger.error(f"{wallet} не удалось заменить токен Twitter на сайте")
+                                    # Продолжаем со следующей основной итерацией
+                                    twitter_retry_count += 1
+                                    continue
                     else:
                         logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
                         await resource_manager.mark_twitter_as_bad(wallet.id)
@@ -419,15 +429,24 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                             if auto_replace and twitter_retry_count < max_twitter_retries - 1:
                                 success, message = await resource_manager.replace_twitter(wallet.id)
                                 if success:
-                                    logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
-                                    # Обновляем токен в кошельке
+                                    logger.info(f"{wallet} токен Twitter заменен в БД: {message}, выполняю замену на сайте...")
+                                    
+                                    # Получаем новый токен из БД
                                     async with Session() as session:
                                         updated_wallet = await session.get(User, wallet.id)
                                         if updated_wallet and updated_wallet.twitter_token:
-                                            wallet.twitter_token = updated_wallet.twitter_token
-                                            # Увеличиваем счетчик попыток и продолжаем со следующей итерацией основного цикла
-                                            twitter_retry_count += 1
-                                            break
+                                            # Используем функцию замены токена
+                                            replace_success = await twitter_client.replace_twitter_token(updated_wallet.twitter_token)
+                                            if replace_success:
+                                                logger.success(f"{wallet} успешно заменен токен Twitter на сайте")
+                                                wallet.twitter_token = updated_wallet.twitter_token
+                                                # Прерываем текущий цикл попыток подключения
+                                                break
+                                            else:
+                                                logger.error(f"{wallet} не удалось заменить токен Twitter на сайте")
+                                                # Продолжаем со следующей основной итерацией
+                                                twitter_retry_count += 1
+                                                break
                                 else:
                                     logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
                                     return False, completed_count
@@ -583,21 +602,34 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                                 # Сначала отвязываем текущий Twitter аккаунт
                                 await twitter_client.disconnect_twitter()
                                 
-                                # Затем заменяем токен
+                                # Затем заменяем токен в БД
                                 success, message = await resource_manager.replace_twitter(wallet.id)
                                 if success:
-                                    logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
-                                    # Обновляем токен в кошельке
+                                    logger.info(f"{wallet} токен Twitter заменен в БД: {message}, выполняю замену на сайте...")
+                                    
+                                    # Получаем новый токен из БД
                                     async with Session() as session:
                                         updated_wallet = await session.get(User, wallet.id)
                                         if updated_wallet and updated_wallet.twitter_token:
-                                            wallet.twitter_token = updated_wallet.twitter_token
-                                            # Увеличиваем счетчик попыток и прерываем текущий цикл подписок
-                                            twitter_retry_count += 1
-                                            # Закрываем текущий клиент Twitter
-                                            await twitter_client.close()
-                                            # Переходим к следующей попытке с новым токеном
-                                            break
+                                            # Используем функцию замены токена
+                                            replace_success = await twitter_client.replace_twitter_token(updated_wallet.twitter_token)
+                                            if replace_success:
+                                                logger.success(f"{wallet} успешно заменен токен Twitter на сайте")
+                                                wallet.twitter_token = updated_wallet.twitter_token
+                                                # Увеличиваем счетчик попыток и прерываем текущий цикл подписок
+                                                twitter_retry_count += 1
+                                                # Закрываем текущий клиент Twitter
+                                                await twitter_client.close()
+                                                # Переходим к следующей попытке с новым токеном
+                                                break
+                                            else:
+                                                logger.error(f"{wallet} не удалось заменить токен Twitter на сайте")
+                                                # Если не удалось заменить токен на сайте, обновляем токен в объекте
+                                                # для следующей попытки, но не используем replace_twitter_token
+                                                wallet.twitter_token = updated_wallet.twitter_token
+                                                twitter_retry_count += 1
+                                                await twitter_client.close()
+                                                break
                                 else:
                                     logger.error(f"{wallet} не удалось заменить токен Twitter: {message}")
             
@@ -641,11 +673,13 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                     if auto_replace and twitter_retry_count < max_twitter_retries - 1:
                         success, message = await resource_manager.replace_twitter(wallet.id)
                         if success:
-                            logger.info(f"{wallet} токен Twitter заменен: {message}, пробуем снова...")
+                            logger.info(f"{wallet} токен Twitter заменен в БД: {message}, пробуем снова...")
+                            
                             # Обновляем токен в кошельке
                             async with Session() as session:
                                 updated_wallet = await session.get(User, wallet.id)
                                 if updated_wallet and updated_wallet.twitter_token:
+                                    # Сохраняем новый токен для следующей попытки
                                     wallet.twitter_token = updated_wallet.twitter_token
                                     # Увеличиваем счетчик попыток и продолжаем
                                     twitter_retry_count += 1

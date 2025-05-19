@@ -26,7 +26,9 @@ class Settings(Singleton, AutoRepr):
         
         self.wallet_startup_delay_min = json_data.get('wallets', {}).get('startup_delay', {}).get('min', 5)
         self.wallet_startup_delay_max = json_data.get('wallets', {}).get('startup_delay', {}).get('max', 15)
-        
+
+        self.referrals_use_random_from_db = json_data.get('referrals', {}).get('use_random_from_db', True)
+        self.referrals_use_only_file_codes = json_data.get('referrals', {}).get('use_only_file_codes', False)       
         # Настройки ресурсов
         self.resources_auto_replace = json_data.get('resources', {}).get('auto_replace', True)
         self.resources_max_failures = json_data.get('resources', {}).get('max_failures', 3)
@@ -54,3 +56,7 @@ class Settings(Singleton, AutoRepr):
     def get_resource_settings(self) -> tuple:
         """Возвращает настройки управления ресурсами"""
         return self.resources_auto_replace, self.resources_max_failures
+
+    def get_referral_settings(self) -> tuple:
+        """Возвращает настройки реферальных кодов"""
+        return self.referrals_use_random_from_db, self.referrals_use_only_file_codes

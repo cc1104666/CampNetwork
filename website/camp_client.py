@@ -3,6 +3,8 @@ from loguru import logger
 from utils.db_api_async.models import User
 from libs.eth_async.client import Client
 from libs.eth_async.data.models import Networks
+from website.referral_manager import load_ref_codes, get_referral_code_for_registration
+from data.models import Settings
 from .auth_client import AuthClient
 from .quest_client import QuestClient
 
@@ -27,15 +29,35 @@ class CampNetworkClient:
         # ID заданий для удобного доступа
         self.QUEST_IDS = self.quest_client.QUEST_IDS
     
-    async def login(self) -> bool:
+    async def login(self, use_referral: bool = True) -> bool:
         """
-        Выполняет авторизацию на сайте
+        Выполняет авторизацию на сайте с использованием реферального кода при необходимости
         
+        Args:
+            use_referral: Использовать ли реферальный код при авторизации
+            
         Returns:
             Статус успеха
         """
-        # Выполняем полный процесс авторизации
-        success = await self.auth_client.login()
+        referral_code = None
+        
+        # Получаем настройки для реферальных кодов
+        settings = Settings()
+        use_random_from_db, use_only_file_codes = settings.get_referral_settings()
+        
+        # Если нужно использовать реферальный код
+        if use_referral and not self.user.completed_quests:
+            # Если указано использовать только коды из файла
+            if use_only_file_codes:
+                file_codes = load_ref_codes()
+                referral_code = file_codes[0] if file_codes else None
+            else:
+                # Используем стандартную логику выбора кода
+                referral_code = await get_referral_code_for_registration(use_random_from_db=use_random_from_db)
+        
+        # Выполняем авторизацию с реферальным кодом
+
+        success = await self.auth_client.login_with_referral(referral_code=referral_code)
         
         if success:
             # Если авторизация успешна, передаем куки и ID пользователя клиенту заданий
@@ -44,7 +66,6 @@ class CampNetworkClient:
             return True
         else:
             return False
-    
 
     async def complete_all_quests(self, retry_failed: bool = True, max_retries: int = 3) -> Dict[str, bool]:
         """

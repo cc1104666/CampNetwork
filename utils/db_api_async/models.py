@@ -17,6 +17,7 @@ class User(Base):
     twitter_token: Mapped[str] = mapped_column(Text, nullable=True, default=None)  # Добавляем поле для Twitter токена
     proxy_status: Mapped[str] = mapped_column(Text, nullable=True, default="OK")  # Статус прокси (OK/BAD)
     twitter_status: Mapped[str] = mapped_column(Text, nullable=True, default="OK")  # Статус токена Twitter (OK/BAD)
+    ref_code: Mapped[str] = mapped_column(Text, nullable=True, default=None)
 
     def __str__(self):
         return f'{self.public_key}'

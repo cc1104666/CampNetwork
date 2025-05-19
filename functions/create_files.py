@@ -9,6 +9,11 @@ from data import config
 
 def create_files():
     touch(path=config.FILES_DIR)
+
+    if not os.path.exists(config.REF_CODES_FILE):
+        with open(config.REF_CODES_FILE, 'w') as f:
+            pass
+
     if not os.path.exists(config.PRIVATE_FILE):
         with open(config.PRIVATE_FILE, 'w') as f:
             pass
@@ -52,6 +57,10 @@ def create_files():
                 "min": 20,  # секунды
                 "max": 40   # секунды
             }
+        },
+        "referrals": {
+            "use_random_from_db": True,  # Использовать случайные коды из БД
+            "use_only_file_codes": False  # Использовать только коды из файла
         },
         # Настройки запуска аккаунтов
         "wallets": {

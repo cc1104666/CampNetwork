@@ -4,6 +4,8 @@ import random
 from datetime import datetime
 from typing import Dict, Optional, Tuple
 from loguru import logger
+from utils.db_api_async.db_api import Session
+from utils.db_api_async.db_activity import DB
 from eth_account.messages import encode_defunct
 from libs.eth_async.client import Client
 from .http_client import BaseHttpClient
@@ -347,3 +349,73 @@ class AuthClient(BaseHttpClient):
         except Exception as e:
             logger.error(f"{self.user} ошибка в процессе авторизации: {str(e)}")
             return False
+
+    async def get_referral_code(self) -> str | None:
+        """
+        Получает реферальный код для текущего пользователя
+        
+        Returns:
+            Реферальный код или None в случае ошибки
+        """
+        if not self.user_id:
+            logger.error(f"{self.user} попытка получить реферальный код без ID пользователя")
+            return None
+            
+        try:
+            headers = await self.get_headers({
+                'Accept': 'application/json, text/plain, */*',
+                'Content-Type': 'application/json',
+                'Origin': 'https://loyalty.campnetwork.xyz',
+            })
+            
+            # Запрос для получения реферального кода
+            success, response = await self.request(
+                url="https://loyalty.campnetwork.xyz/api/referral/codes",
+                method="POST",
+                json_data={"loyaltyRuleId": "d3dc0a56-ffd2-4c67-88a7-96d40f22fc47"},
+                headers=headers
+            )
+            
+            if success and isinstance(response, dict) and "referralCode" in response:
+                ref_code = response.get("referralCode")
+                logger.success(f"{self.user} получен реферальный код: {ref_code}")
+                
+                # Сохраняем реферальный код в БД
+                try:
+                    async with Session() as session:
+                        db = DB(session=session)
+                        await db.update_ref_code(self.user.id, ref_code)
+                except Exception as e:
+                    logger.error(f"{self.user} ошибка при сохранении реферального кода: {str(e)}")
+                    
+                return ref_code
+            else:
+                logger.error(f"{self.user} не удалось получить реферальный код: {response}")
+                return None
+        except Exception as e:
+            logger.error(f"{self.user} ошибка при получении реферального кода: {str(e)}")
+            return None
+
+    async def login_with_referral(self, referral_code: str | None = None) -> bool:
+        """
+        Авторизация с использованием реферального кода
+        
+        Args:
+            referral_code: Реферальный код (опционально)
+            
+        Returns:
+            Статус успеха
+        """
+        # Если передан реферальный код, добавляем его в cookies
+        if referral_code:
+            logger.info(f'{self.user} Начинаю регистрацию с реф кодом: {referral_code}')
+            self.cookies['referral_code'] = referral_code
+            
+        # Выполняем стандартную авторизацию
+        success = await self.login()
+        
+        if success:
+            # Получаем и сохраняем свой реферальный код
+            await self.get_referral_code()
+        
+        return success

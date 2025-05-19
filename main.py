@@ -1,6 +1,15 @@
+from pathlib import Path
 from functions.create_files import create_files
 from functions.activity import (add_wallets_db, complete_all_wallets_quests, 
                                get_wallets_stats, complete_specific_quests)
+
+from utils.db_api_async.db_api import Session
+from utils.db_api_async.db_activity import DB
+from website.referral_manager import (
+    load_ref_codes, 
+    add_ref_code_to_file, 
+    update_ref_codes_file_from_db
+)
 
 from sqlalchemy import text
 from website.resource_manager import ResourceManager
@@ -60,6 +69,11 @@ async def option_update_settings():
         console.print("\n[bold]4. Настройки ресурсов:[/]")
         console.print(f"   Автоматическая замена ресурсов: {'[green]Да[/]' if settings.resources_auto_replace else '[red]Нет[/]'}")
         console.print(f"   Максимальное количество ошибок: {settings.resources_max_failures}")
+
+        console.print("\n[bold]5. Настройки реферальных кодов:[/]")
+        console.print(f"   Использовать случайные коды из БД: {'[green]Да[/]' if settings.referrals_use_random_from_db else '[red]Нет[/]'}")
+        console.print(f"   Использовать только коды из файла: {'[green]Да[/]' if settings.referrals_use_only_file_codes else '[red]Нет[/]'}")
+        
         
         # Запрашиваем, какие настройки обновить
         console.print("\n[bold cyan]Выберите настройки для обновления:[/]")
@@ -67,12 +81,13 @@ async def option_update_settings():
         console.print("2. Общие настройки")
         console.print("3. Настройки кошельков")
         console.print("4. Настройки ресурсов")
-        console.print("5. Все настройки")
-        console.print("6. Назад")
+        console.print("5. Настройки реферальных кодов")
+        console.print("6. Все настройки")
+        console.print("7. Назад")
         
         choice = int(input("> "))
         
-        if choice == 6:
+        if choice == 7:
             return
         
         # Получаем текущие настройки из json файла
@@ -164,10 +179,24 @@ async def option_update_settings():
             max_failures = input(f"Максимальное количество ошибок [текущее: {settings.resources_max_failures}]: ").strip()
             if max_failures.isdigit() and int(max_failures) > 0:
                 current_settings["resources"]["max_failures"] = int(max_failures)
-        
+
+        if choice in [5, 6]:
+            console.print("\n[bold]Обновление настроек реферальных кодов:[/]")
+            
+            # Использовать случайные коды из БД
+            use_random = input(f"Использовать случайные коды из БД (y/n) [текущее: {'y' if settings.referrals_use_random_from_db else 'n'}]: ").strip().lower()
+            if use_random in ["y", "n"]:
+                current_settings["referrals"]["use_random_from_db"] = (use_random == "y")
+            
+            # Использовать только коды из файла
+            use_only_file = input(f"Использовать только коды из файла (y/n) [текущее: {'y' if settings.referrals_use_only_file_codes else 'n'}]: ").strip().lower()
+            if use_only_file in ["y", "n"]:
+                current_settings["referrals"]["use_only_file_codes"] = (use_only_file == "y")
+
         # Сохраняем обновленные настройки
         write_json(path=SETTINGS_FILE, obj=current_settings, indent=2)
         console.print("\n[bold green]Настройки успешно обновлены[/]")
+
         
     except Exception as e:
         logger.error(f"Ошибка при обновлении настроек: {str(e)}")
@@ -340,6 +369,110 @@ async def option_manage_resources():
         console.print(f"\n[bold red]Ошибка при управлении ресурсами: {str(e)}[/]")
         input("Нажмите Enter для продолжения...")
 
+async def option_manage_refcodes():
+    """Управление реферальными кодами"""
+    try:
+        while True:
+            # Загружаем коды из файла
+            file_codes = load_ref_codes()
+            
+            # Получаем коды из БД
+            async with Session() as session:
+                db = DB(session=session)
+                db_codes = await db.get_available_ref_codes()
+            
+            console.print("\n[bold cyan]Управление реферальными кодами[/]")
+            console.print(f"Найдено [green]{len(file_codes)}[/] кодов в файле и [green]{len(db_codes)}[/] кодов в БД")
+            
+            # Меню
+            menu = Table(show_header=False, box=None)
+            menu.add_column("Option", style="cyan")
+            menu.add_column("Description", style="white")
+            
+            menu.add_row("1)", "Показать коды из файла")
+            menu.add_row("2)", "Показать коды из БД")
+            menu.add_row("3)", "Добавить код в файл")
+            menu.add_row("4)", "Обновить коды в файле из БД")
+            menu.add_row("5)", "Назад")
+            
+            console.print(menu)
+            
+            choice = input("\n> ")
+            
+            if choice == "1":
+                # Показать коды из файла
+                console.print("\n[bold]Реферальные коды из файла:[/]")
+                
+                if file_codes:
+                    for i, code in enumerate(file_codes, 1):
+                        console.print(f" {i}. {code}")
+                else:
+                    console.print("[yellow]Файл с реферальными кодами пуст[/]")
+                
+                input("\nНажмите Enter для продолжения...")
+                
+            elif choice == "2":
+                # Показать коды из БД
+                console.print("\n[bold]Реферальные коды из БД:[/]")
+                
+                if db_codes:
+                    for i, code in enumerate(db_codes, 1):
+                        console.print(f" {i}. {code}")
+                else:
+                    console.print("[yellow]В базе данных нет реферальных кодов[/]")
+                
+                input("\nНажмите Enter для продолжения...")
+                
+            elif choice == "3":
+                # Добавить код в файл
+                console.print("\n[bold]Добавление кода в файл:[/]")
+                
+                new_code = input("Введите реферальный код: ").strip()
+                
+                if new_code:
+                    success = await add_ref_code_to_file(new_code)
+                    if success:
+                        console.print(f"[green]Код {new_code} успешно добавлен в файл[/]")
+                    else:
+                        console.print(f"[red]Ошибка при добавлении кода {new_code} в файл[/]")
+                else:
+                    console.print("[yellow]Код не может быть пустым[/]")
+                
+                input("\nНажмите Enter для продолжения...")
+                
+            elif choice == "4":
+                # Обновить коды в файле из БД
+                console.print("\n[bold]Обновление кодов в файле из БД:[/]")
+                
+                if not db_codes:
+                    console.print("[yellow]В базе данных нет реферальных кодов[/]")
+                    input("\nНажмите Enter для продолжения...")
+                    continue
+                
+                confirm = input("Это действие перезапишет все коды в файле. Продолжить? (y/n): ").strip().lower()
+                
+                if confirm == 'y':
+                    success = await update_ref_codes_file_from_db()
+                    if success:
+                        console.print(f"[green]Файл обновлен, добавлено {len(db_codes)} кодов[/]")
+                    else:
+                        console.print("[red]Ошибка при обновлении файла с кодами[/]")
+                
+                input("\nНажмите Enter для продолжения...")
+                
+            elif choice == "5":
+                # Назад
+                return
+                
+            else:
+                console.print("\n[bold yellow]Неверный выбор. Пожалуйста, выберите действие от 1 до 5.[/]")
+                input("Нажмите Enter для продолжения...")
+                
+    except Exception as e:
+        logger.error(f"Ошибка при управлении реферальными кодами: {str(e)}")
+        console.print(f"\n[bold red]Ошибка при управлении реферальными кодами: {str(e)}[/]")
+        input("Нажмите Enter для продолжения...")
+
 def print_menu():
     """Выводит меню программы"""
     menu = Table(show_header=False, box=None)
@@ -351,8 +484,9 @@ def print_menu():
     menu.add_row("3)", "Выполнить выбранные задания")
     menu.add_row("4)", "Показать статистику")
     menu.add_row("5)", "Управление ресурсами")  # Новый пункт меню
-    menu.add_row("6)", "Настройки")
-    menu.add_row("7)", "Выход")
+    menu.add_row("6)", "Управление реферальными кодами")  # Новый пункт меню
+    menu.add_row("7)", "Настройки")
+    menu.add_row("8)", "Выход")
     
     console.print(menu)
 
@@ -361,8 +495,21 @@ async def main():
     # Инициализация файлов и базы данных
     create_files()
     from utils.db_api_async.db_init import init_db
+    # await init_db()
+    migration_dir = Path('./migrations')
+    has_migrations = migration_dir.exists()
+    
     await init_db()
     
+    # Если есть директория миграций, проверяем, что все обновления прошли успешно
+    if has_migrations:
+        from utils.db_api_async.db_migrator import check_and_migrate_db
+        migration_success = await check_and_migrate_db()
+        
+        # if not migration_success:
+        #     console.print("\n[bold yellow]Предупреждение: Обновление структуры базы данных может быть неполным.[/]")
+        #     console.print("[bold yellow]Если программа будет работать нестабильно, попробуйте создать новую базу данных.[/]")
+        #     input("Нажмите Enter для продолжения...")
     
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')  # Очищаем консоль
@@ -403,17 +550,20 @@ async def main():
             elif action == "5":
                 # Управление ресурсами (новая опция)
                 await option_manage_resources()
-                
+
             elif action == "6":
+                # Управление реферальными кодами (новая опция)
+                await option_manage_refcodes()
+                
+            elif action == "7":
                 # Настройки
                 await option_update_settings()
                 sys.exit(0)
                 
-            elif action == "7":
+            elif action == "8":
                 # Выход
                 console.print("\n[bold cyan]Выход из программы[/]")
                 sys.exit(0)
-                
             else:
                 console.print("\n[bold yellow]Неверный выбор. Пожалуйста, выберите действие от 1 до 7.[/]")
                 input("Нажмите Enter для продолжения...")

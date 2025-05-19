@@ -14,6 +14,7 @@ FILES_DIR = os.path.join(ROOT_DIR, 'files')
 
 CAPMONSTER_API_KEY = os.getenv('CAPMONSTER_API_KEY')
 
+REF_CODES_FILE = os.path.join(FILES_DIR, 'ref_codes.txt')
 PROXY_FILE = os.path.join(FILES_DIR, 'proxy.txt')
 PRIVATE_FILE = os.path.join(FILES_DIR, 'private.txt')
 TWITTER_FILE = os.path.join(FILES_DIR, 'twitter.txt')

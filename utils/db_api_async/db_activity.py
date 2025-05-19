@@ -287,3 +287,39 @@ class DB:
             return True
         except Exception as e:
             return False
+
+    async def update_ref_code(self, user_id: int, ref_code: str | None) -> bool:
+        """
+        Обновляет реферальный код пользователя
+        
+        Args:
+            user_id: ID пользователя
+            ref_code: Реферальный код
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            user = await self.session.get(User, user_id)
+            if not user:
+                return False
+                
+            if not ref_code:
+                return False
+            user.ref_code = ref_code
+            await self.session.commit()
+            return True
+        except Exception as e:
+            return False
+
+    async def get_available_ref_codes(self) -> list:
+        """
+        Получает список доступных реферальных кодов из БД
+        
+        Returns:
+            Список реферальных кодов
+        """
+        query = select(User.ref_code).where(User.ref_code != None)
+        result = await self.session.execute(query)
+        codes = [code[0] for code in result.all() if code[0]]
+        return codes
