@@ -1,4 +1,5 @@
 import os
+import random
 from typing import List, Tuple, Optional
 from loguru import logger
 from utils.db_api_async.db_api import Session
@@ -10,9 +11,7 @@ class ResourceManager:
     
     def __init__(self):
         """Инициализация менеджера ресурсов"""
-        # Кэш для отслеживания использованных ресурсов
-        self.used_reserve_proxies = set()
-        self.used_reserve_twitter = set()
+        pass
     
     def _load_from_file(self, file_path: str) -> List[str]:
         """
@@ -29,38 +28,80 @@ class ResourceManager:
                 return [line.strip() for line in file if line.strip()]
         return []
     
+    def _save_to_file(self, file_path: str, data: List[str]) -> bool:
+        """
+        Сохраняет данные в файл
+        
+        Args:
+            file_path: Путь к файлу
+            data: Список строк для сохранения
+            
+        Returns:
+            Статус успеха
+        """
+        try:
+            with open(file_path, 'w') as file:
+                for line in data:
+                    file.write(f"{line}\n")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении в файл {file_path}: {str(e)}")
+            return False
+    
     def _get_available_proxy(self) -> Optional[str]:
         """
-        Получает доступное резервное прокси
+        Получает доступное резервное прокси и удаляет его из файла
         
         Returns:
             Прокси или None, если нет доступных
         """
+        # Загружаем список прокси из файла
         all_proxies = self._load_from_file(config.RESERVE_PROXY_FILE)
-        available = [p for p in all_proxies if p not in self.used_reserve_proxies]
         
-        if not available:
+        if not all_proxies:
+            logger.warning("Нет доступных прокси в файле")
             return None
-            
-        proxy = available[0]  # Берем первое доступное
-        self.used_reserve_proxies.add(proxy)
+        
+        # Выбираем случайное прокси
+        proxy = random.choice(all_proxies)
+        
+        # Удаляем выбранное прокси из списка
+        all_proxies.remove(proxy)
+        
+        # Сохраняем обновленный список обратно в файл
+        if self._save_to_file(config.RESERVE_PROXY_FILE, all_proxies):
+            logger.info(f"Прокси успешно выбрано и удалено из файла. Осталось: {len(all_proxies)}")
+        else:
+            logger.warning(f"Не удалось обновить файл прокси, но прокси было выбрано")
+        
         return proxy
     
     def _get_available_twitter(self) -> Optional[str]:
         """
-        Получает доступный резервный токен Twitter
+        Получает доступный резервный токен Twitter и удаляет его из файла
         
         Returns:
             Токен или None, если нет доступных
         """
+        # Загружаем список токенов из файла
         all_tokens = self._load_from_file(config.RESERVE_TWITTER_FILE)
-        available = [t for t in all_tokens if t not in self.used_reserve_twitter]
         
-        if not available:
+        if not all_tokens:
+            logger.warning("Нет доступных токенов Twitter в файле")
             return None
-            
-        token = available[0]  # Берем первый доступный
-        self.used_reserve_twitter.add(token)
+        
+        # Выбираем случайный токен
+        token = random.choice(all_tokens)
+        
+        # Удаляем выбранный токен из списка
+        all_tokens.remove(token)
+        
+        # Сохраняем обновленный список обратно в файл
+        if self._save_to_file(config.RESERVE_TWITTER_FILE, all_tokens):
+            logger.info(f"Токен Twitter успешно выбран и удален из файла. Осталось: {len(all_tokens)}")
+        else:
+            logger.warning(f"Не удалось обновить файл токенов Twitter, но токен был выбран")
+        
         return token
     
     async def get_bad_resources_stats(self) -> Tuple[int, int]:
@@ -95,6 +136,7 @@ class ResourceManager:
             if success:
                 return True, f"Прокси успешно заменено на {new_proxy}"
             else:
+                # Не возвращаем прокси в файл, так как оно может быть уже использовано
                 return False, "Не удалось заменить прокси"
     
     async def replace_twitter(self, user_id: int) -> Tuple[bool, str]:
@@ -116,8 +158,11 @@ class ResourceManager:
             success = await db.replace_bad_twitter(user_id, new_token)
             
             if success:
+                logger.success(f"Токен Twitter успешно заменен в базе данных для пользователя {user_id}")
                 return True, "Токен Twitter успешно заменен"
             else:
+                # Не возвращаем токен в файл, так как он может быть уже использован
+                logger.error(f"Не удалось заменить токен Twitter в базе данных для пользователя {user_id}")
                 return False, "Не удалось заменить токен Twitter"
     
     async def mark_proxy_as_bad(self, user_id: int) -> bool:
