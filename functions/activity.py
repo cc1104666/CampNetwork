@@ -102,9 +102,43 @@ async def process_wallet(wallet: User):
     max_retries = 3
     retry_count = 0
     
+    twitter_enabled = settings.twitter_enabled and wallet.twitter_token is not None
+    
+    # Получаем список незавершенных заданий
+    async with Session() as session:
+        db = DB(session=session)
+        completed_quests_ids = wallet.completed_quests.split(',') if wallet.completed_quests else []
+        all_quests_ids = list(QuestClient.QUEST_IDS.values())
+        
+        # Фильтруем только те задания, которые еще не выполнены
+        incomplete_quests_ids = [quest_id for quest_id in all_quests_ids if quest_id not in completed_quests_ids]
+        
+        # Преобразуем ID заданий обратно в имена
+        incomplete_quests = []
+        for quest_id in incomplete_quests_ids:
+            for quest_name, qid in QuestClient.QUEST_IDS.items():
+                if qid == quest_id:
+                    incomplete_quests.append(quest_name)
+                    break
+    
+    # Получаем список всех Twitter заданий (подписок)
+    twitter_follow_tasks = []
+    if twitter_enabled:
+        for account_name in settings.twitter_follow_accounts:
+            quest_id = TwitterClient.TWITTER_QUESTS_MAP.get("Follow", {}).get(account_name)
+            if quest_id and quest_id not in completed_quests_ids:
+                twitter_follow_tasks.append(account_name)
+    
+    # Считаем общее количество всех заданий
+    total_tasks = len(incomplete_quests) + len(twitter_follow_tasks)
+    
+    if total_tasks == 0:
+        logger.success(f"{wallet} все задания уже выполнены")
+        return True
+
     startup_min, startup_max = settings.get_wallet_startup_delay()
     delay = random.uniform(startup_min, startup_max)
-    logger.info(f"Запуск кошелька {wallet}) через {int(delay)} сек.")
+    logger.info(f"Запуск кошелька {wallet} через {int(delay)} сек.")
     await asyncio.sleep(delay)
     while retry_with_new_proxy and retry_count < max_retries:
         try:
