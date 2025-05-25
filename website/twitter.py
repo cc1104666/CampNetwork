@@ -45,6 +45,7 @@ class TwitterClient(BaseHttpClient):
             "clustersxyz": "c7d0e2c8-87e7-46df-81f3-48f311735c22",
             "JukebloxDapp": "02e3d5b3-e65e-41c8-b159-405f48255cdf",
             "campnetworkxyz": "2660f24a-e3ac-4093-8c16-7ae718c00731",
+            "hitmakrr": "dfa110a8-4079-4309-a023-e0c9077ace5e",
         }
     }
 
@@ -695,7 +696,7 @@ class TwitterClient(BaseHttpClient):
             logger.error(f"{self.user} ошибка при проверке задания: {str(e)}")
         
         # Выполняем подписку
-        follow_success, error_message = await self.follow_account(account_name)
+        follow_success, error_message, already_following = await self.follow_account(account_name)
         
         # Если подписаться не удалось, но это из-за лимитов Twitter - логируем информацию
         if not follow_success:
@@ -887,7 +888,7 @@ class TwitterClient(BaseHttpClient):
                         # Выполняем подписки
                         follow_results = {}
                         for account in follow_accounts:
-                            follow_success, error_message = await self.follow_account(account)
+                            follow_success, error_message, already_following = await self.follow_account(account)
                             follow_results[account] = follow_success
                             
                             # Проверяем, не достигнут ли лимит подписок

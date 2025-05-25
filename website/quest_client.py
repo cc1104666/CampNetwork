@@ -33,6 +33,7 @@ class QuestClient(BaseHttpClient):
         "WideWorlds": "d0928019-b49f-4ffd-8450-d7f5d3821f59",
         "RewardedTv": "d7a3a18b-38fd-45d5-937a-f974dff403bd",
         "Kraft": "f4de4fa8-ad5c-45c9-a804-0483309de9f9",
+        "Hitmakr": "afac07d2-6c0e-42ae-9dd8-1fff68ca6a49",
     }
     
     # URL для запросов

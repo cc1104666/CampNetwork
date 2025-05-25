@@ -47,6 +47,8 @@ ACTUAL_FOLLOWS_TWITTER = [
                         "clustersxyz",
                         "JukebloxDapp",
                         "campnetworkxyz",
+                        "hitmakrr",
+    
 ]
 
 LOG_FILE = os.path.join(FILES_DIR, 'log.log')
