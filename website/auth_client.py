@@ -28,7 +28,8 @@ class AuthClient(BaseHttpClient):
         super().__init__(*args, **kwargs)
         self.client = Client(
             private_key=self.user.private_key,
-            proxy=self.user.proxy
+            proxy=self.user.proxy,
+            check_proxy=False
         )
         self.cloudflare = CloudflareHandler(self)
         
