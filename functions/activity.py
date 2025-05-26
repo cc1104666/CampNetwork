@@ -455,7 +455,7 @@ async def process_twitter_tasks(wallet: User, camp_client, resource_manager, set
                     # Проверяем, может быть проблема с токеном Twitter
                     if connect_attempts >= max_connect_attempts:
                         last_error = getattr(twitter_client, 'last_error', '')
-                        if last_error and any(x in str(last_error).lower() for x in ["unauthorized", "auth", "token", "login"]):
+                        if last_error and any(x in str(last_error).lower() for x in ["unauthorized", "auth", "token", "login", "limit", "unable to follow"]):
                             logger.warning(f"{wallet} проблема с токеном Twitter: {last_error}")
                             await resource_manager.mark_twitter_as_bad(wallet.id)
                             

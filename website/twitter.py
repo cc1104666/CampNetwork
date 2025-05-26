@@ -535,16 +535,6 @@ class TwitterClient(BaseHttpClient):
             except Exception as e:
                 error_msg = str(e)
                 
-                    
-                # Код 161 - достигнут лимит подписок
-                if "unable to follow more people" in error_msg.lower():
-                    logger.warning(f"{self.user} достигнут лимит подписок в Twitter. Попробуйте завтра.")
-                    return False, "Достигнут лимит подписок. Попробуйте завтра.", False
-                
-                # Код 344 - достигнут дневной лимит действий
-                elif "daily limit" in error_msg.lower():
-                    logger.warning(f"{self.user} достигнут дневной лимит действий в Twitter. Попробуйте завтра.")
-                    return False, "Достигнут дневной лимит действий. Попробуйте завтра.", False
                 
                 logger.error(f"{self.user} ошибка при подписке на @{clean_account_name}: {error_msg}")
                 return False, error_msg, False
@@ -700,12 +690,8 @@ class TwitterClient(BaseHttpClient):
         
         # Если подписаться не удалось, но это из-за лимитов Twitter - логируем информацию
         if not follow_success:
-            if error_message and ("лимит подписок" in error_message or "дневной лимит" in error_message):
-                logger.warning(f"{self.user} {error_message} Пропускаем задание подписки на {account_name}")
-                return False
-            else:
-                logger.error(f"{self.user} не удалось подписаться на {account_name}")
-                return False
+            logger.error(f"{self.user} не удалось подписаться на {account_name}")
+            return False
         
         # Отправляем запрос на выполнение задания
         try:
@@ -768,7 +754,7 @@ class TwitterClient(BaseHttpClient):
             account_names: Список аккаунтов для подписки
             
         Returns:
-            Словарь с результатами {аккаунт: успех}
+    Словарь с результатами {аккаунт: успех}
         """
         settings = Settings()
         action_min_delay, action_max_delay = settings.get_twitter_action_delay()
@@ -891,7 +877,6 @@ class TwitterClient(BaseHttpClient):
                             follow_success, error_message, already_following = await self.follow_account(account)
                             follow_results[account] = follow_success
                             
-                                
                             # Добавляем задержку между подписками
                             if len(follow_accounts) > 1 and account != follow_accounts[-1]:
                                 await asyncio.sleep(random.uniform(min_delay/2, max_delay/2))
@@ -921,12 +906,8 @@ class TwitterClient(BaseHttpClient):
                     self.error_count += 1
                     
                     # Проверяем на ограничения Twitter
-                    if "limit" in str(e).lower() or "unable to follow" in str(e).lower():
-                        resource_manager = ResourceManager()
-                        await resource_manager.mark_twitter_as_bad(self.user.id)
-                    
                     # Проверяем, указывает ли ошибка на проблемы с авторизацией или прокси
-                    if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+                    if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned", "limit", "unable to follow"]):
                         resource_manager = ResourceManager()
                         await resource_manager.mark_twitter_as_bad(self.user.id)
                     
@@ -984,7 +965,7 @@ class TwitterClient(BaseHttpClient):
                     await resource_manager.mark_proxy_as_bad(self.user.id)
             
             # Проверяем, может быть проблема с токеном Twitter
-            if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
+            if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned", "limit", "unable to follow"]):
                 resource_manager = ResourceManager()
                 await resource_manager.mark_twitter_as_bad(self.user.id)
                 
