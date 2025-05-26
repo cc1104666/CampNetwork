@@ -891,15 +891,6 @@ class TwitterClient(BaseHttpClient):
                             follow_success, error_message, already_following = await self.follow_account(account)
                             follow_results[account] = follow_success
                             
-                            # Проверяем, не достигнут ли лимит подписок
-                            if not follow_success and error_message and (
-                                "лимит подписок" in error_message or 
-                                "дневной лимит" in error_message
-                            ):
-                                twitter_rate_limited = True
-                                rate_limit_message = error_message
-                                logger.warning(f"{self.user} {error_message} Пропускаем оставшиеся подписки")
-                                break
                                 
                             # Добавляем задержку между подписками
                             if len(follow_accounts) > 1 and account != follow_accounts[-1]:
@@ -931,9 +922,8 @@ class TwitterClient(BaseHttpClient):
                     
                     # Проверяем на ограничения Twitter
                     if "limit" in str(e).lower() or "unable to follow" in str(e).lower():
-                        twitter_rate_limited = True
-                        rate_limit_message = f"Достигнут лимит Twitter в задании {task_type}"
-                        logger.warning(f"{self.user} {rate_limit_message}")
+                        resource_manager = ResourceManager()
+                        await resource_manager.mark_twitter_as_bad(self.user.id)
                     
                     # Проверяем, указывает ли ошибка на проблемы с авторизацией или прокси
                     if any(x in str(e).lower() for x in ["unauthorized", "authentication", "token", "login", "banned"]):
