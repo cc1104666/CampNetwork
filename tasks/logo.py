@@ -5,11 +5,11 @@ from rich.table import Table
 
 console = Console()
 
-# Генерация ASCII-арта
+# 生成 ASCII 艺术字
 ascii_text = pyfiglet.figlet_format("BULDOZER", font="big")
 max_length = max(len(line) for line in ascii_text.split("\n"))
 
-# Вывод красивого ASCII-арта
+# 输出漂亮的 ASCII 艺术字
 console.print(f"[cyan]{ascii_text}[/cyan]")
 
 table = Table(width=max_length)

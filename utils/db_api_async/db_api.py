@@ -1,15 +1,15 @@
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
 
-# Исправляем строку подключения для MySQL
+# 修复 MySQL 连接字符串
 
 
-# Создаем асинхронный движок
+# 创建异步引擎
 async_engine = create_async_engine(
     'sqlite+aiosqlite:///./files/wallets.db',
-    echo=False,  # Можно включить для дебага
+    echo=False,  # 可以开启用于调试
 )
 
-# Создаем фабрику для асинхронных сессий
+# 创建异步会话工厂
 async_session = async_sessionmaker(
     bind=async_engine, expire_on_commit=False, class_=AsyncSession
 )

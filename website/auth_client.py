@@ -13,9 +13,9 @@ from .captcha_handler import CloudflareHandler
 
 
 class AuthClient(BaseHttpClient):
-    """Клиент для авторизации на CampNetwork"""
+    """CampNetwork 认证客户端"""
     
-    # URL для авторизации
+    # 认证 URL
     BASE_URL = "https://loyalty.campnetwork.xyz"
     AUTH_CSRF_URL = f"{BASE_URL}/api/auth/csrf"
     AUTH_CALLBACK_URL = f"{BASE_URL}/api/auth/callback/credentials"
@@ -33,7 +33,7 @@ class AuthClient(BaseHttpClient):
         )
         self.cloudflare = CloudflareHandler(self)
         
-        # Данные авторизации
+        # 认证数据
         self.csrf_token = None
         self.nonce = None
         self.session_data = None
@@ -41,38 +41,38 @@ class AuthClient(BaseHttpClient):
     
     async def initial_request(self) -> bool:
         """
-        Выполняет начальный запрос для проверки наличия Cloudflare защиты
+        执行初始请求以检查是否存在 Cloudflare 保护
         
         Returns:
-            Статус успеха
+            成功状态
         """
         try:
-            logger.info(f"{self.user} выполняю начальный запрос для проверки Cloudflare защиты")
+            logger.info(f"{self.user} 正在执行初始请求以检查 Cloudflare 保护")
             
-            # Проверяем наличие Cloudflare защиты
+            # 检查是否存在 Cloudflare 保护
             
             success, response = await self.request(
                 url=f"{self.BASE_URL}/home",
                 method="GET",
-                check_cloudflare=True  # Включаем автоматическую проверку и обработку Cloudflare
+                check_cloudflare=True  # 启用自动检查和处理 Cloudflare
             )
             if success:
-                logger.success(f"{self.user} начальный запрос успешен")
+                logger.success(f"{self.user} 初始请求成功")
                 return True
             else:
-                logger.error(f"{self.user} не удалось выполнить начальный запрос")
+                logger.error(f"{self.user} 无法执行初始请求")
                 return False
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при выполнении начального запроса: {str(e)}")
+            logger.error(f"{self.user} 执行初始请求时出错: {str(e)}")
             return False
     
     async def connect_wallet(self) -> bool:
         """
-        Первый этап авторизации - подключение кошелька через Dynamic Auth
+        认证第一阶段 - 通过 Dynamic Auth 连接钱包
         
         Returns:
-            Статус успеха
+            成功状态
         """
         json_data = {
             'address': f'{self.user.public_key}',
@@ -97,18 +97,18 @@ class AuthClient(BaseHttpClient):
         )
         
         if success:
-            logger.info(f"{self.user} успешно подключил кошелек")
+            logger.info(f"{self.user} 成功连接钱包")
             return True
         else:
-            logger.error(f"{self.user} не удалось подключить кошелек: {response}")
+            logger.error(f"{self.user} 无法连接钱包: {response}")
             return False
     
     async def get_nonce(self) -> bool:
         """
-        Получает nonce для авторизации
+        获取认证所需的 nonce
         
         Returns:
-            Статус успеха
+            成功状态
         """
         headers = await self.get_headers({
             'x-dyn-version': 'WalletKit/3.9.11',
@@ -123,18 +123,18 @@ class AuthClient(BaseHttpClient):
         
         if success and isinstance(response, dict) and 'nonce' in response:
             self.nonce = response['nonce']
-            logger.info(f"{self.user} получил nonce: {self.nonce[:10]}...")
+            logger.info(f"{self.user} 获取到 nonce: {self.nonce[:10]}...")
             return True
         else:
-            logger.error(f"{self.user} не удалось получить nonce: {response}")
+            logger.error(f"{self.user} 无法获取 nonce: {response}")
             return False
     
     async def get_csrf_token(self) -> bool | str:
         """
-        Получает CSRF токен с проверкой на ограничение запросов
+        获取 CSRF 令牌，检查请求限制
         
         Returns:
-            Статус успеха или строка с кодом ошибки
+            成功状态或错误代码字符串
         """
         headers = await self.get_headers({
             'Content-Type': 'application/json',
@@ -151,33 +151,33 @@ class AuthClient(BaseHttpClient):
         
         if success and isinstance(response, dict) and 'csrfToken' in response:
             self.csrf_token = response['csrfToken']
-            logger.info(f"{self.user} получил CSRF токен: {self.csrf_token[:10]}...")
+            logger.info(f"{self.user} 获取到 CSRF 令牌: {self.csrf_token[:10]}...")
             return True
         else:
-            # Проверяем на ошибку о превышении лимита запросов
+            # 检查是否超过请求限制
             if isinstance(response, dict) and response.get("message") == "Too many requests, please try again later.":
-                logger.warning(f"{self.user} превышен лимит запросов при получении CSRF токена")
+                logger.warning(f"{self.user} 获取 CSRF 令牌时超过请求限制")
                 return "RATE_LIMIT"
             else:
-                logger.error(f"{self.user} не удалось получить CSRF токен: {response}")
+                logger.error(f"{self.user} 无法获取 CSRF 令牌: {response}")
                 return False
 
     async def sign_message(self) -> Tuple[Optional[Dict], Optional[str]]:
         """
-        Подписывает сообщение для авторизации
+        签名认证消息
         
         Returns:
-            (message, signature): Сообщение и подпись
+            (message, signature): 消息和签名
         """
         if not self.nonce:
-            logger.error(f"{self.user} попытка подписать сообщение без nonce")
+            logger.error(f"{self.user} 尝试在没有 nonce 的情况下签名消息")
             return None, None
             
         try:
-            # Текущая дата и время в формате ISO
+            # 当前日期和时间，ISO 格式
             current_time = datetime.utcnow().isoformat('T') + 'Z'
             
-            # Создаем сообщение для подписи
+            # 创建要签名的消息
             message = {
                 "domain": "loyalty.campnetwork.xyz",
                 "address": self.user.public_key,
@@ -189,7 +189,7 @@ class AuthClient(BaseHttpClient):
                 "issuedAt": current_time
             }
             
-            # Создаем строковое представление сообщения в формате EIP-191
+            # 创建 EIP-191 格式的消息字符串
             message_str = (
                 f"loyalty.campnetwork.xyz wants you to sign in with your Ethereum account:\n"
                 f"{message['address']}\n\n"
@@ -201,222 +201,240 @@ class AuthClient(BaseHttpClient):
                 f"Issued At: {message['issuedAt']}"
             )
             
-            # Кодируем сообщение для подписи
+            # 对消息进行编码以进行签名
             message_bytes = encode_defunct(text=message_str)
             
-            # Подписываем сообщение
+            # 对消息进行签名
             sign = self.client.account.sign_message(message_bytes)
             signature = sign.signature.hex()
             
-            logger.info(f"{self.user} успешно подписал сообщение")
+            logger.info(f"{self.user} 成功签名消息")
             
             return message, signature
             
         except Exception as e:
-            logger.error(f"{self.user} ошибка при подписании сообщения: {str(e)}")
+            logger.error(f"{self.user} 签名消息时出错: {str(e)}")
             return None, None
     
     async def authenticate(self) -> bool:
         """
-        Авторизация с использованием подписанного сообщения
+        执行认证过程
         
         Returns:
-            Статус успеха
-        """
-        if not self.csrf_token or not self.nonce:
-            logger.error(f"{self.user} попытка аутентификации без CSRF токена или nonce")
-            return False
-            
-        # Подписываем сообщение
-        message, signature = await self.sign_message()
-        if not message or not signature:
-            return False
-            
-        # Формируем данные формы для запроса
-        form_data = {
-            'message': json.dumps(message),
-            'accessToken': signature,
-            'signature': signature,
-            'walletConnectorName': 'Rabby',
-            'walletAddress': self.user.public_key,
-            'redirect': 'false',
-            'callbackUrl': '/protected',
-            'chainType': 'evm',
-            'csrfToken': self.csrf_token,
-            'json': 'true'
-        }
-        
-        headers = await self.get_headers({
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Referer': 'https://loyalty.campnetwork.xyz/home',
-            'Origin': 'https://loyalty.campnetwork.xyz',
-            'Sec-Fetch-Site': 'same-origin',
-        })
-        
-        success, response = await self.request(
-            url=self.AUTH_CALLBACK_URL,
-            method="POST",
-            data=form_data,
-            headers=headers
-        )
-        
-        if success:
-            # Проверяем наличие токена сессии в куках
-            if '__Secure-next-auth.session-token' in self.cookies:
-                logger.success(f"{self.user} успешно авторизован")
-                return True
-        
-        logger.error(f"{self.user} не удалось авторизоваться: {response}")
-        return False
-    
-    async def get_session_info(self) -> bool:
-        """
-        Получает информацию о текущей сессии
-        
-        Returns:
-            Статус успеха
-        """
-        if '__Secure-next-auth.session-token' not in self.cookies:
-            logger.error(f"{self.user} попытка получить информацию о сессии без токена")
-            return False
-            
-        headers = await self.get_headers({
-            'Content-Type': 'application/json',
-            'Referer': 'https://loyalty.campnetwork.xyz/home',
-            'Sec-Fetch-Site': 'same-origin',
-        })
-        
-        success, response = await self.request(
-            url=self.AUTH_SESSION_URL,
-            method="GET",
-            headers=headers
-        )
-        
-        if success and isinstance(response, dict) and 'user' in response and 'id' in response['user']:
-            self.session_data = response
-            self.user_id = response['user']['id']
-            logger.info(f"{self.user} получил информацию о сессии, ID пользователя: {self.user_id}")
-            return True
-        else:
-            logger.error(f"{self.user} не удалось получить информацию о сессии: {response}")
-            return False
-
-    async def login(self) -> bool:
-        """
-        Полный процесс авторизации с обработкой ограничения запросов
-        
-        Returns:
-            Статус успеха
+            成功状态
         """
         try:
-            # Шаг 1: Начальный запрос и обработка Cloudflare
-            if not await self.initial_request():
-                return False
-                
-            # Шаг 2: Подключаем кошелек
+            # 连接钱包
             if not await self.connect_wallet():
                 return False
-                
-            # Шаг 3: Получаем nonce
+            
+            # 获取 nonce
             if not await self.get_nonce():
                 return False
-                
-            # Шаг 4: Получаем CSRF токен с обработкой ограничения запросов
+            
+            # 获取 CSRF 令牌
             csrf_result = await self.get_csrf_token()
-            
-            # Если получили ошибку о слишком частых запросах - добавляем обработку
-            if csrf_result == "RATE_LIMIT":
-                # Ставим аккаунт в таймаут на 5-10 минут (300-600 секунд)
-                timeout_duration = random.uniform(300, 600)
-                logger.warning(f"{self.user} достигнут лимит запросов, ожидаем {int(timeout_duration)} секунд перед повторной попыткой")
-                await asyncio.sleep(timeout_duration)
-                
-                # Повторяем попытку получения CSRF токена
-                if not await self.get_csrf_token():
+            if csrf_result is False:
+                return False
+            elif csrf_result == "RATE_LIMIT":
+                # 如果超过请求限制，等待后重试
+                logger.info(f"{self.user} 等待 60 秒后重试...")
+                await asyncio.sleep(60)
+                csrf_result = await self.get_csrf_token()
+                if csrf_result is not True:
                     return False
-            elif not csrf_result:
-                return False
-                
-            # Шаг 5: Аутентифицируемся с подписанным сообщением
-            if not await self.authenticate():
-                return False
-                
-            # Шаг 6: Получаем информацию о сессии
-            if not await self.get_session_info():
-                return False
-                
-            return True
             
-        except Exception as e:
-            logger.error(f"{self.user} ошибка в процессе авторизации: {str(e)}")
-            return False
-
-    async def get_referral_code(self) -> str | None:
-        """
-        Получает реферальный код для текущего пользователя
-        
-        Returns:
-            Реферальный код или None в случае ошибки
-        """
-        if not self.user_id:
-            logger.error(f"{self.user} попытка получить реферальный код без ID пользователя")
-            return None
+            # 签名消息
+            message, signature = await self.sign_message()
+            if not message or not signature:
+                return False
             
-        try:
+            # 准备认证数据
+            json_data = {
+                'message': message,
+                'signature': signature,
+                'redirect': False,
+                'csrfToken': self.csrf_token,
+                'callbackUrl': '/home',
+                'json': True
+            }
+            
             headers = await self.get_headers({
-                'Accept': 'application/json, text/plain, */*',
                 'Content-Type': 'application/json',
+                'Referer': 'https://loyalty.campnetwork.xyz/home',
                 'Origin': 'https://loyalty.campnetwork.xyz',
+                'Sec-Fetch-Site': 'same-origin',
             })
             
-            # Запрос для получения реферального кода
+            # 发送认证请求
             success, response = await self.request(
-                url="https://loyalty.campnetwork.xyz/api/referral/codes",
+                url=self.AUTH_CALLBACK_URL,
                 method="POST",
-                json_data={"loyaltyRuleId": "d3dc0a56-ffd2-4c67-88a7-96d40f22fc47"},
+                json_data=json_data,
                 headers=headers
             )
             
-            if success and isinstance(response, dict) and "referralCode" in response:
-                ref_code = response.get("referralCode")
-                logger.success(f"{self.user} получен реферальный код: {ref_code}")
-                
-                # Сохраняем реферальный код в БД
-                try:
-                    async with Session() as session:
-                        db = DB(session=session)
-                        await db.update_ref_code(self.user.id, ref_code)
-                except Exception as e:
-                    logger.error(f"{self.user} ошибка при сохранении реферального кода: {str(e)}")
-                    
-                return ref_code
+            if success:
+                logger.success(f"{self.user} 认证成功")
+                return True
             else:
-                logger.error(f"{self.user} не удалось получить реферальный код: {response}")
-                return None
+                logger.error(f"{self.user} 认证失败: {response}")
+                return False
+                
         except Exception as e:
-            logger.error(f"{self.user} ошибка при получении реферального кода: {str(e)}")
+            logger.error(f"{self.user} 认证过程中出错: {str(e)}")
+            return False
+    
+    async def get_session_info(self) -> bool:
+        """
+        获取会话信息
+        
+        Returns:
+            成功状态
+        """
+        try:
+            headers = await self.get_headers({
+                'Content-Type': 'application/json',
+                'Referer': 'https://loyalty.campnetwork.xyz/home',
+                'Origin': 'https://loyalty.campnetwork.xyz',
+                'Sec-Fetch-Site': 'same-origin',
+            })
+            
+            success, response = await self.request(
+                url=self.AUTH_SESSION_URL,
+                method="GET",
+                headers=headers
+            )
+            
+            if success and isinstance(response, dict):
+                self.session_data = response
+                if 'user' in response and 'id' in response['user']:
+                    self.user_id = response['user']['id']
+                    logger.info(f"{self.user} 获取到会话信息，用户 ID: {self.user_id}")
+                    return True
+                else:
+                    logger.error(f"{self.user} 会话信息中没有用户 ID")
+                    return False
+            else:
+                logger.error(f"{self.user} 无法获取会话信息: {response}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"{self.user} 获取会话信息时出错: {str(e)}")
+            return False
+    
+    async def login(self) -> bool:
+        """
+        执行完整的登录流程
+        
+        Returns:
+            成功状态
+        """
+        try:
+            # 执行初始请求
+            if not await self.initial_request():
+                return False
+            
+            # 执行认证
+            if not await self.authenticate():
+                return False
+            
+            # 获取会话信息
+            if not await self.get_session_info():
+                return False
+            
+            logger.success(f"{self.user} 登录成功")
+            return True
+            
+        except Exception as e:
+            logger.error(f"{self.user} 登录过程中出错: {str(e)}")
+            return False
+    
+    async def get_referral_code(self) -> str | None:
+        """
+        获取推荐码
+        
+        Returns:
+            推荐码或 None
+        """
+        try:
+            if not self.user_id:
+                logger.error(f"{self.user} 尝试获取推荐码但没有用户 ID")
+                return None
+            
+            headers = await self.get_headers({
+                'Content-Type': 'application/json',
+                'Referer': 'https://loyalty.campnetwork.xyz/home',
+                'Origin': 'https://loyalty.campnetwork.xyz',
+                'Sec-Fetch-Site': 'same-origin',
+            })
+            
+            success, response = await self.request(
+                url=f"{self.BASE_URL}/api/referral/code",
+                method="GET",
+                headers=headers
+            )
+            
+            if success and isinstance(response, dict) and 'code' in response:
+                code = response['code']
+                logger.info(f"{self.user} 获取到推荐码: {code}")
+                return code
+            else:
+                logger.error(f"{self.user} 无法获取推荐码: {response}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"{self.user} 获取推荐码时出错: {str(e)}")
             return None
-
+    
     async def login_with_referral(self, referral_code: str | None = None) -> bool:
         """
-        Авторизация с использованием реферального кода
+        使用推荐码登录
         
         Args:
-            referral_code: Реферальный код (опционально)
+            referral_code: 推荐码（可选）
             
         Returns:
-            Статус успеха
+            成功状态
         """
-        # Если передан реферальный код, добавляем его в cookies
-        if referral_code:
-            logger.info(f'{self.user} Начинаю регистрацию с реф кодом: {referral_code}')
-            self.cookies['referral_code'] = referral_code
+        try:
+            # 如果未提供推荐码，尝试获取
+            if not referral_code:
+                referral_code = await self.get_referral_code()
+                if not referral_code:
+                    logger.error(f"{self.user} 无法获取推荐码")
+                    return False
             
-        # Выполняем стандартную авторизацию
-        success = await self.login()
-        
-        if success:
-            # Получаем и сохраняем свой реферальный код
-            await self.get_referral_code()
-        
-        return success
+            # 执行登录
+            if not await self.login():
+                return False
+            
+            # 使用推荐码
+            headers = await self.get_headers({
+                'Content-Type': 'application/json',
+                'Referer': 'https://loyalty.campnetwork.xyz/home',
+                'Origin': 'https://loyalty.campnetwork.xyz',
+                'Sec-Fetch-Site': 'same-origin',
+            })
+            
+            json_data = {
+                'code': referral_code
+            }
+            
+            success, response = await self.request(
+                url=f"{self.BASE_URL}/api/referral/use",
+                method="POST",
+                json_data=json_data,
+                headers=headers
+            )
+            
+            if success:
+                logger.success(f"{self.user} 成功使用推荐码 {referral_code}")
+                return True
+            else:
+                logger.error(f"{self.user} 使用推荐码失败: {response}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"{self.user} 使用推荐码登录时出错: {str(e)}")
+            return False

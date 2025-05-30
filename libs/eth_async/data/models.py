@@ -146,7 +146,7 @@ class Network:
         self.explorer: str | None = explorer
         self.decimals = decimals
         self.api = api
-        # todo: добавить поле decimals
+        # todo: 添加 decimals 字段
 
         if not self.chain_id:
             try:

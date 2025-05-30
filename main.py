@@ -29,12 +29,12 @@ from rich.text import Text
 console = Console()
 
 def print_logo():
-    """Выводит логотип программы"""
-    # Создаем более простую рамку с фиксированной шириной
+    """显示程序标志"""
+    # 创建一个更简单的固定宽度边框
     panel = Panel(
-        "[bold white]CAMP NETWORK FARMER[/bold white]\n\n"
-        "GitHub: [link]https://github.com/Buldozerch[/link]\n"
-        "Channel: [link]https://t.me/buldozercode[/link]",
+        "[bold white]CAMP NETWORK 任务农场[/bold white]\n\n"
+        "GitHub: [link]https://github.com/cc1104666/CampNetwork[/link]\n"
+        "频道: [link]https://discord.gg/xpjFpug7[/link]",
         width=60,
         border_style="cyan",
         padding=(1, 2)
@@ -43,456 +43,455 @@ def print_logo():
     console.print()
 
 async def option_update_settings():
-    """Обновляет настройки программы"""
+    """更新程序设置"""
     settings = Settings()
     try:
-        # Выводим текущие настройки
-        console.print("\n[bold cyan]Текущие настройки:[/]")
+        # 显示当前设置
+        console.print("\n[bold cyan]当前设置:[/]")
         
-        # Twitter настройки
-        console.print("\n[bold]1. Twitter настройки:[/]")
-        console.print(f"   Использовать Twitter: {'[green]Да[/]' if settings.twitter_enabled else '[red]Нет[/]'}")
-        console.print(f"   Задержка между действиями в Twitter: {settings.twitter_delay_actions_min}-{settings.twitter_delay_actions_max} секунд")
-        console.print(f"   Задержка между заданиями Twitter: {settings.twitter_delay_quests_min}-{settings.twitter_delay_quests_max} секунд")
+        # Twitter 设置
+        console.print("\n[bold]1. Twitter 设置:[/]")
+        console.print(f"   使用 Twitter: {'[green]是[/]' if settings.twitter_enabled else '[red]否[/]'}")
+        console.print(f"   Twitter 操作之间的延迟: {settings.twitter_delay_actions_min}-{settings.twitter_delay_actions_max} 秒")
+        console.print(f"   Twitter 任务之间的延迟: {settings.twitter_delay_quests_min}-{settings.twitter_delay_quests_max} 秒")
         
-        # Общие настройки
-        console.print("\n[bold]2. Общие настройки:[/]")
-        console.print(f"   Задержка между заданиями: {settings.quest_delay_min}-{settings.quest_delay_max} секунд")
+        # 常规设置
+        console.print("\n[bold]2. 常规设置:[/]")
+        console.print(f"   任务之间的延迟: {settings.quest_delay_min}-{settings.quest_delay_max} 秒")
         
-        # Настройки кошельков
-        console.print("\n[bold]3. Настройки кошельков:[/]")
-        wallet_end = "[green]все[/]" if settings.wallet_range_end == 0 else str(settings.wallet_range_end)
-        console.print(f"   Диапазон кошельков: {settings.wallet_range_start}-{wallet_end}")
-        console.print(f"   Задержка между запуском аккаунтов: {settings.wallet_startup_delay_min}-{settings.wallet_startup_delay_max} секунд")
+        # 钱包设置
+        console.print("\n[bold]3. 钱包设置:[/]")
+        wallet_end = "[green]全部[/]" if settings.wallet_range_end == 0 else str(settings.wallet_range_end)
+        console.print(f"   钱包范围: {settings.wallet_range_start}-{wallet_end}")
+        console.print(f"   账户启动之间的延迟: {settings.wallet_startup_delay_min}-{settings.wallet_startup_delay_max} 秒")
         
-        # Настройки ресурсов
-        console.print("\n[bold]4. Настройки ресурсов:[/]")
-        console.print(f"   Автоматическая замена ресурсов: {'[green]Да[/]' if settings.resources_auto_replace else '[red]Нет[/]'}")
-        console.print(f"   Максимальное количество ошибок: {settings.resources_max_failures}")
+        # 资源设置
+        console.print("\n[bold]4. 资源设置:[/]")
+        console.print(f"   自动替换资源: {'[green]是[/]' if settings.resources_auto_replace else '[red]否[/]'}")
+        console.print(f"   最大错误次数: {settings.resources_max_failures}")
 
-        console.print("\n[bold]5. Настройки реферальных кодов:[/]")
-        console.print(f"   Использовать случайные коды из БД: {'[green]Да[/]' if settings.referrals_use_random_from_db else '[red]Нет[/]'}")
-        console.print(f"   Использовать только коды из файла: {'[green]Да[/]' if settings.referrals_use_only_file_codes else '[red]Нет[/]'}")
+        console.print("\n[bold]5. 推荐码设置:[/]")
+        console.print(f"   使用数据库中的随机码: {'[green]是[/]' if settings.referrals_use_random_from_db else '[red]否[/]'}")
+        console.print(f"   仅使用文件中的码: {'[green]是[/]' if settings.referrals_use_only_file_codes else '[red]否[/]'}")
         
-        
-        # Запрашиваем, какие настройки обновить
-        console.print("\n[bold cyan]Выберите настройки для обновления:[/]")
-        console.print("1. Twitter настройки")
-        console.print("2. Общие настройки")
-        console.print("3. Настройки кошельков")
-        console.print("4. Настройки ресурсов")
-        console.print("5. Настройки реферальных кодов")
-        console.print("6. Все настройки")
-        console.print("7. Назад")
+        # 询问要更新哪些设置
+        console.print("\n[bold cyan]选择要更新的设置:[/]")
+        console.print("1. Twitter 设置")
+        console.print("2. 常规设置")
+        console.print("3. 钱包设置")
+        console.print("4. 资源设置")
+        console.print("5. 推荐码设置")
+        console.print("6. 所有设置")
+        console.print("7. 返回")
         
         choice = int(input("> "))
         
         if choice == 7:
             return
         
-        # Получаем текущие настройки из json файла
+        # 从 json 文件获取当前设置
         from libs.eth_async.utils.files import read_json, write_json
         from data.config import SETTINGS_FILE
         
         current_settings = read_json(path=SETTINGS_FILE)
         
-        # Обновляем Twitter настройки
+        # 更新 Twitter 设置
         if choice in [1, 5]:
-            console.print("\n[bold]Обновление Twitter настроек:[/]")
+            console.print("\n[bold]更新 Twitter 设置:[/]")
             
-            # Использовать Twitter
-            use_twitter = input("Использовать Twitter (y/n) [текущее: " + 
+            # 使用 Twitter
+            use_twitter = input("使用 Twitter (y/n) [当前: " + 
                              ("y" if settings.twitter_enabled else "n") + "]: ").strip().lower()
             if use_twitter in ["y", "n"]:
                 current_settings["twitter"]["enabled"] = (use_twitter == "y")
             
-            # Задержка между действиями
-            action_delay_min = input(f"Минимальная задержка между действиями (секунды) [текущее: {settings.twitter_delay_actions_min}]: ").strip()
+            # 操作之间的延迟
+            action_delay_min = input(f"操作之间的最小延迟（秒）[当前: {settings.twitter_delay_actions_min}]: ").strip()
             if action_delay_min.isdigit() and int(action_delay_min) > 0:
                 current_settings["twitter"]["delay_between_actions"]["min"] = int(action_delay_min)
                 
-            action_delay_max = input(f"Максимальная задержка между действиями (секунды) [текущее: {settings.twitter_delay_actions_max}]: ").strip()
+            action_delay_max = input(f"操作之间的最大延迟（秒）[当前: {settings.twitter_delay_actions_max}]: ").strip()
             if action_delay_max.isdigit() and int(action_delay_max) > int(current_settings["twitter"]["delay_between_actions"]["min"]):
                 current_settings["twitter"]["delay_between_actions"]["max"] = int(action_delay_max)
             
-            # Задержка между заданиями
-            quest_delay_min = input(f"Минимальная задержка между заданиями Twitter (секунды) [текущее: {settings.twitter_delay_quests_min}]: ").strip()
+            # 任务之间的延迟
+            quest_delay_min = input(f"Twitter 任务之间的最小延迟（秒）[当前: {settings.twitter_delay_quests_min}]: ").strip()
             if quest_delay_min.isdigit() and int(quest_delay_min) > 0:
                 current_settings["twitter"]["delay_between_quests"]["min"] = int(quest_delay_min)
                 
-            quest_delay_max = input(f"Максимальная задержка между заданиями Twitter (секунды) [текущее: {settings.twitter_delay_quests_max}]: ").strip()
+            quest_delay_max = input(f"Twitter 任务之间的最大延迟（秒）[当前: {settings.twitter_delay_quests_max}]: ").strip()
             if quest_delay_max.isdigit() and int(quest_delay_max) > int(current_settings["twitter"]["delay_between_quests"]["min"]):
                 current_settings["twitter"]["delay_between_quests"]["max"] = int(quest_delay_max)
         
-        # Обновляем общие настройки
+        # 更新常规设置
         if choice in [2, 5]:
-            console.print("\n[bold]Обновление общих настроек:[/]")
+            console.print("\n[bold]更新常规设置:[/]")
             
-            # Задержка между заданиями
-            quest_delay_min = input(f"Минимальная задержка между заданиями (секунды) [текущее: {settings.quest_delay_min}]: ").strip()
+            # 任务之间的延迟
+            quest_delay_min = input(f"任务之间的最小延迟（秒）[当前: {settings.quest_delay_min}]: ").strip()
             if quest_delay_min.isdigit() and int(quest_delay_min) > 0:
                 current_settings["quests"]["delay_between_quests"]["min"] = int(quest_delay_min)
                 
-            quest_delay_max = input(f"Максимальная задержка между заданиями (секунды) [текущее: {settings.quest_delay_max}]: ").strip()
+            quest_delay_max = input(f"任务之间的最大延迟（秒）[当前: {settings.quest_delay_max}]: ").strip()
             if quest_delay_max.isdigit() and int(quest_delay_max) > int(current_settings["quests"]["delay_between_quests"]["min"]):
                 current_settings["quests"]["delay_between_quests"]["max"] = int(quest_delay_max)
         
-        # Обновляем настройки кошельков
+        # 更新钱包设置
         if choice in [3, 5]:
-            console.print("\n[bold]Обновление настроек кошельков:[/]")
+            console.print("\n[bold]更新钱包设置:[/]")
             
-            # Диапазон кошельков
-            wallet_start = input(f"Начальный индекс кошелька [текущее: {settings.wallet_range_start}]: ").strip()
+            # 钱包范围
+            wallet_start = input(f"起始钱包索引 [当前: {settings.wallet_range_start}]: ").strip()
             if wallet_start.isdigit() and int(wallet_start) >= 0:
                 current_settings["wallets"]["range"]["start"] = int(wallet_start)
                 
-            wallet_end = input(f"Конечный индекс кошелька (0 = все) [текущее: {settings.wallet_range_end}]: ").strip()
+            wallet_end = input(f"结束钱包索引 (0 = 全部) [当前: {settings.wallet_range_end}]: ").strip()
             if wallet_end.isdigit() and int(wallet_end) >= 0:
                 current_settings["wallets"]["range"]["end"] = int(wallet_end)
             
-            # Задержка между запуском аккаунтов
-            startup_delay_min = input(f"Минимальная задержка между запуском аккаунтов (секунды) [текущее: {settings.wallet_startup_delay_min}]: ").strip()
+            # 账户启动之间的延迟
+            startup_delay_min = input(f"账户启动之间的最小延迟（秒）[当前: {settings.wallet_startup_delay_min}]: ").strip()
             if startup_delay_min.isdigit() and int(startup_delay_min) >= 0:
                 current_settings["wallets"]["startup_delay"]["min"] = int(startup_delay_min)
                 
-            startup_delay_max = input(f"Максимальная задержка между запуском аккаунтов (секунды) [текущее: {settings.wallet_startup_delay_max}]: ").strip()
+            startup_delay_max = input(f"账户启动之间的最大延迟（秒）[当前: {settings.wallet_startup_delay_max}]: ").strip()
             if startup_delay_max.isdigit() and int(startup_delay_max) > int(current_settings["wallets"]["startup_delay"]["min"]):
                 current_settings["wallets"]["startup_delay"]["max"] = int(startup_delay_max)
         
-        # Обновляем настройки ресурсов
+        # 更新资源设置
         if choice in [4, 5]:
-            console.print("\n[bold]Обновление настроек ресурсов:[/]")
+            console.print("\n[bold]更新资源设置:[/]")
             
-            # Создаем раздел ресурсов, если его еще нет
+            # 创建资源部分（如果还没有）
             if "resources" not in current_settings:
                 current_settings["resources"] = {
                     "auto_replace": True,
                     "max_failures": 3
                 }
             
-            # Автоматическая замена
-            auto_replace = input(f"Автоматическая замена ресурсов (y/n) [текущее: {'y' if settings.resources_auto_replace else 'n'}]: ").strip().lower()
+            # 自动替换
+            auto_replace = input(f"自动替换资源 (y/n) [当前: {'y' if settings.resources_auto_replace else 'n'}]: ").strip().lower()
             if auto_replace in ["y", "n"]:
                 current_settings["resources"]["auto_replace"] = (auto_replace == "y")
             
-            # Максимальное количество ошибок
-            max_failures = input(f"Максимальное количество ошибок [текущее: {settings.resources_max_failures}]: ").strip()
+            # 最大错误次数
+            max_failures = input(f"最大错误次数 [当前: {settings.resources_max_failures}]: ").strip()
             if max_failures.isdigit() and int(max_failures) > 0:
                 current_settings["resources"]["max_failures"] = int(max_failures)
 
         if choice in [5, 6]:
-            console.print("\n[bold]Обновление настроек реферальных кодов:[/]")
+            console.print("\n[bold]更新推荐码设置:[/]")
             
-            # Использовать случайные коды из БД
-            use_random = input(f"Использовать случайные коды из БД (y/n) [текущее: {'y' if settings.referrals_use_random_from_db else 'n'}]: ").strip().lower()
+            # 使用数据库中的随机码
+            use_random = input(f"使用数据库中的随机码 (y/n) [当前: {'y' if settings.referrals_use_random_from_db else 'n'}]: ").strip().lower()
             if use_random in ["y", "n"]:
                 current_settings["referrals"]["use_random_from_db"] = (use_random == "y")
             
-            # Использовать только коды из файла
-            use_only_file = input(f"Использовать только коды из файла (y/n) [текущее: {'y' if settings.referrals_use_only_file_codes else 'n'}]: ").strip().lower()
+            # 仅使用文件中的码
+            use_only_file = input(f"仅使用文件中的码 (y/n) [当前: {'y' if settings.referrals_use_only_file_codes else 'n'}]: ").strip().lower()
             if use_only_file in ["y", "n"]:
                 current_settings["referrals"]["use_only_file_codes"] = (use_only_file == "y")
 
-        # Сохраняем обновленные настройки
+        # 保存更新后的设置
         write_json(path=SETTINGS_FILE, obj=current_settings, indent=2)
-        console.print("\n[bold green]Настройки успешно обновлены[/]")
+        console.print("\n[bold green]设置已成功更新[/]")
 
         
     except Exception as e:
-        logger.error(f"Ошибка при обновлении настроек: {str(e)}")
-        console.print(f"\n[bold red]Ошибка при обновлении настроек: {str(e)}[/]")
+        logger.error(f"更新设置时出错: {str(e)}")
+        console.print(f"\n[bold red]更新设置时出错: {str(e)}[/]")
 
 async def option_manage_resources():
-    """Управление ресурсами (прокси, токены Twitter)"""
+    """资源管理（代理、Twitter 令牌）"""
     try:
         
         resource_manager = ResourceManager()
         
         while True:
-            # Получаем статистику плохих ресурсов
+            # 获取不良资源统计
             bad_proxies_count, bad_twitter_count = await resource_manager.get_bad_resources_stats()
             
-            # Получаем количество доступных резервных ресурсов
+            # 获取可用备用资源数量
             reserve_proxies = resource_manager._load_from_file(config.RESERVE_PROXY_FILE)
             reserve_twitter = resource_manager._load_from_file(config.RESERVE_TWITTER_FILE)
             
-            console.print("\n[bold cyan]Управление ресурсами[/]")
-            console.print(f"Обнаружено [red]{bad_proxies_count}[/] плохих прокси и [red]{bad_twitter_count}[/] плохих токенов Twitter")
-            console.print(f"Доступно [green]{len(reserve_proxies)}[/] резервных прокси и [green]{len(reserve_twitter)}[/] резервных токенов Twitter")
+            console.print("\n[bold cyan]资源管理[/]")
+            console.print(f"发现 [red]{bad_proxies_count}[/] 个不良代理和 [red]{bad_twitter_count}[/] 个不良 Twitter 令牌")
+            console.print(f"可用 [green]{len(reserve_proxies)}[/] 个备用代理和 [green]{len(reserve_twitter)}[/] 个备用 Twitter 令牌")
             
-            # Меню
+            # 菜单
             menu = Table(show_header=False, box=None)
-            menu.add_column("Option", style="cyan")
-            menu.add_column("Description", style="white")
+            menu.add_column("选项", style="cyan")
+            menu.add_column("描述", style="white")
             
-            menu.add_row("1)", "Показать плохие прокси")
-            menu.add_row("2)", "Показать плохие токены Twitter")
-            menu.add_row("3)", "Заменить плохие прокси")
-            menu.add_row("4)", "Заменить плохие токены Twitter")
-            menu.add_row("5)", "Заменить все плохие ресурсы")
-            menu.add_row("6)", "Назад")
+            menu.add_row("1)", "显示不良代理")
+            menu.add_row("2)", "显示不良 Twitter 令牌")
+            menu.add_row("3)", "替换不良代理")
+            menu.add_row("4)", "替换不良 Twitter 令牌")
+            menu.add_row("5)", "替换所有不良资源")
+            menu.add_row("6)", "返回")
             
             console.print(menu)
             
             choice = input("\n> ")
             
             if choice == "1":
-                # Показать плохие прокси
-                console.print("\n[bold]Плохие прокси:[/]")
+                # 显示不良代理
+                console.print("\n[bold]不良代理:[/]")
                 
                 bad_proxies = await resource_manager.get_bad_proxies()
                 
                 if bad_proxies:
                     for wallet in bad_proxies:
                         short_key = f"{wallet.public_key[:6]}...{wallet.public_key[-4:]}"
-                        console.print(f" - ID: {wallet.id}, Кошелек: {short_key}, Прокси: {wallet.proxy}")
+                        console.print(f" - ID: {wallet.id}, 钱包: {short_key}, 代理: {wallet.proxy}")
                 else:
-                    console.print("[green]Нет плохих прокси[/]")
+                    console.print("[green]没有不良代理[/]")
                 
-                input("\nНажмите Enter для продолжения...")
+                input("\n按 Enter 继续...")
                 
             elif choice == "2":
-                # Показать плохие токены Twitter
-                console.print("\n[bold]Плохие токены Twitter:[/]")
+                # 显示不良 Twitter 令牌
+                console.print("\n[bold]不良 Twitter 令牌:[/]")
                 
                 bad_twitter = await resource_manager.get_bad_twitter()
                 
                 if bad_twitter:
                     for wallet in bad_twitter:
                         short_key = f"{wallet.public_key[:6]}...{wallet.public_key[-4:]}"
-                        console.print(f" - ID: {wallet.id}, Кошелек: {short_key}")
+                        console.print(f" - ID: {wallet.id}, 钱包: {short_key}")
                 else:
-                    console.print("[green]Нет плохих токенов Twitter[/]")
+                    console.print("[green]没有不良 Twitter 令牌[/]")
                 
-                input("\nНажмите Enter для продолжения...")
+                input("\n按 Enter 继续...")
                 
             elif choice == "3":
-                # Заменить плохие прокси
-                console.print("\n[bold]Замена плохих прокси...[/]")
+                # 替换不良代理
+                console.print("\n[bold]替换不良代理...[/]")
                 
                 if len(reserve_proxies) == 0:
-                    console.print("[red]Ошибка:[/] Нет доступных резервных прокси в файле reserve_proxy.txt")
-                    input("\nНажмите Enter для продолжения...")
+                    console.print("[red]错误:[/] 没有可用的备用代理文件 reserve_proxy.txt")
+                    input("\n按 Enter 继续...")
                     continue
                 
                 if bad_proxies_count == 0:
-                    console.print("[green]Нет плохих прокси для замены[/]")
-                    input("\nНажмите Enter для продолжения...")
+                    console.print("[green]没有不良代理需要替换[/]")
+                    input("\n按 Enter 继续...")
                     continue
                 
                 if len(reserve_proxies) < bad_proxies_count:
-                    console.print(f"[yellow]Внимание:[/] Доступно только {len(reserve_proxies)} резервных прокси, при этом плохих - {bad_proxies_count}")
+                    console.print(f"[yellow]注意:[/] 可用备用代理数量不足，可用 {len(reserve_proxies)}，需要 {bad_proxies_count}")
                 
-                # Запрашиваем подтверждение
-                confirm = input("Продолжить с заменой? (y/n): ").strip().lower()
+                # 请求确认
+                confirm = input("继续替换吗？ (y/n): ").strip().lower()
                 if confirm != 'y':
                     continue
                 
-                # Выполняем замену
+                # 执行替换
                 replaced, total = await resource_manager.replace_all_bad_proxies()
                 
-                console.print(f"[green]Заменено {replaced} из {total} плохих прокси[/]")
-                input("\nНажмите Enter для продолжения...")
+                console.print(f"[green]替换了 {replaced} 个，共 {total} 个不良代理[/]")
+                input("\n按 Enter 继续...")
                 
             elif choice == "4":
-                # Заменить плохие токены Twitter
-                console.print("\n[bold]Замена плохих токенов Twitter...[/]")
+                # 替换不良 Twitter 令牌
+                console.print("\n[bold]替换不良 Twitter 令牌...[/]")
                 
                 if len(reserve_twitter) == 0:
-                    console.print("[red]Ошибка:[/] Нет доступных резервных токенов Twitter в файле reserve_twitter.txt")
-                    input("\nНажмите Enter для продолжения...")
+                    console.print("[red]错误:[/] 没有可用的备用 Twitter 令牌文件 reserve_twitter.txt")
+                    input("\n按 Enter 继续...")
                     continue
                 
                 if bad_twitter_count == 0:
-                    console.print("[green]Нет плохих токенов Twitter для замены[/]")
-                    input("\nНажмите Enter для продолжения...")
+                    console.print("[green]没有不良 Twitter 令牌需要替换[/]")
+                    input("\n按 Enter 继续...")
                     continue
                 
                 if len(reserve_twitter) < bad_twitter_count:
-                    console.print(f"[yellow]Внимание:[/] Доступно только {len(reserve_twitter)} резервных токенов Twitter, при этом плохих - {bad_twitter_count}")
+                    console.print(f"[yellow]注意:[/] 可用备用 Twitter 令牌数量不足，可用 {len(reserve_twitter)}，需要 {bad_twitter_count}")
                 
-                # Запрашиваем подтверждение
-                confirm = input("Продолжить с заменой? (y/n): ").strip().lower()
+                # 请求确认
+                confirm = input("继续替换吗？ (y/n): ").strip().lower()
                 if confirm != 'y':
                     continue
                 
-                # Выполняем замену
+                # 执行替换
                 replaced, total = await resource_manager.replace_all_bad_twitter()
                 
-                console.print(f"[green]Заменено {replaced} из {total} плохих токенов Twitter[/]")
-                input("\nНажмите Enter для продолжения...")
+                console.print(f"[green]替换了 {replaced} 个，共 {total} 个不良 Twitter 令牌[/]")
+                input("\n按 Enter 继续...")
                 
             elif choice == "5":
-                # Заменить все плохие ресурсы
-                console.print("\n[bold]Замена всех плохих ресурсов...[/]")
+                # 替换所有不良资源
+                console.print("\n[bold]替换所有不良资源...[/]")
                 
                 if len(reserve_proxies) == 0 and len(reserve_twitter) == 0:
-                    console.print("[red]Ошибка:[/] Нет доступных резервных ресурсов")
-                    input("\nНажмите Enter для продолжения...")
+                    console.print("[red]错误:[/] 没有可用备用资源")
+                    input("\n按 Enter 继续...")
                     continue
                 
                 if bad_proxies_count == 0 and bad_twitter_count == 0:
-                    console.print("[green]Нет плохих ресурсов для замены[/]")
-                    input("\nНажмите Enter для продолжения...")
+                    console.print("[green]没有不良资源需要替换[/]")
+                    input("\n按 Enter 继续...")
                     continue
                 
-                # Выводим предупреждения
+                # 显示警告
                 if len(reserve_proxies) < bad_proxies_count:
-                    console.print(f"[yellow]Внимание:[/] Доступно только {len(reserve_proxies)} резервных прокси, при этом плохих - {bad_proxies_count}")
+                    console.print(f"[yellow]注意:[/] 可用备用代理数量不足，可用 {len(reserve_proxies)}，需要 {bad_proxies_count}")
                 
                 if len(reserve_twitter) < bad_twitter_count:
-                    console.print(f"[yellow]Внимание:[/] Доступно только {len(reserve_twitter)} резервных токенов Twitter, при этом плохих - {bad_twitter_count}")
+                    console.print(f"[yellow]注意:[/] 可用备用 Twitter 令牌数量不足，可用 {len(reserve_twitter)}，需要 {bad_twitter_count}")
                 
-                # Запрашиваем подтверждение
-                confirm = input("Продолжить с заменой? (y/n): ").strip().lower()
+                # 请求确认
+                confirm = input("继续替换吗？ (y/n): ").strip().lower()
                 if confirm != 'y':
                     continue
                 
-                # Выполняем замену всех ресурсов
+                # 执行替换所有资源
                 proxies_replaced, proxies_total = await resource_manager.replace_all_bad_proxies()
                 twitter_replaced, twitter_total = await resource_manager.replace_all_bad_twitter()
                 
-                console.print(f"[green]Заменено {proxies_replaced} из {proxies_total} плохих прокси[/]")
-                console.print(f"[green]Заменено {twitter_replaced} из {twitter_total} плохих токенов Twitter[/]")
-                input("\nНажмите Enter для продолжения...")
+                console.print(f"[green]替换了 {proxies_replaced} 个，共 {proxies_total} 个不良代理[/]")
+                console.print(f"[green]替换了 {twitter_replaced} 个，共 {twitter_total} 个不良 Twitter 令牌[/]")
+                input("\n按 Enter 继续...")
                 
             elif choice == "6":
-                # Назад
+                # 返回
                 return
                 
             else:
-                console.print("\n[bold yellow]Неверный выбор. Пожалуйста, выберите действие от 1 до 6.[/]")
-                input("Нажмите Enter для продолжения...")
+                console.print("\n[bold yellow]无效选择。请选择 1-6 之间的操作。[/]")
+                input("按 Enter 继续...")
                 
     except Exception as e:
-        logger.error(f"Ошибка при управлении ресурсами: {str(e)}")
-        console.print(f"\n[bold red]Ошибка при управлении ресурсами: {str(e)}[/]")
-        input("Нажмите Enter для продолжения...")
+        logger.error(f"资源管理时出错: {str(e)}")
+        console.print(f"\n[bold red]资源管理时出错: {str(e)}[/]")
+        input("按 Enter 继续...")
 
 async def option_manage_refcodes():
-    """Управление реферальными кодами"""
+    """管理推荐码"""
     try:
         while True:
-            # Загружаем коды из файла
+            # 从文件加载代码
             file_codes = load_ref_codes()
             
-            # Получаем коды из БД
+            # 从数据库获取代码
             async with Session() as session:
                 db = DB(session=session)
                 db_codes = await db.get_available_ref_codes()
             
-            console.print("\n[bold cyan]Управление реферальными кодами[/]")
-            console.print(f"Найдено [green]{len(file_codes)}[/] кодов в файле и [green]{len(db_codes)}[/] кодов в БД")
+            console.print("\n[bold cyan]管理推荐码[/]")
+            console.print(f"发现 [green]{len(file_codes)}[/] 个代码在文件中，[green]{len(db_codes)}[/] 个代码在数据库中")
             
-            # Меню
+            # 菜单
             menu = Table(show_header=False, box=None)
-            menu.add_column("Option", style="cyan")
-            menu.add_column("Description", style="white")
+            menu.add_column("选项", style="cyan")
+            menu.add_column("描述", style="white")
             
-            menu.add_row("1)", "Показать коды из файла")
-            menu.add_row("2)", "Показать коды из БД")
-            menu.add_row("3)", "Добавить код в файл")
-            menu.add_row("4)", "Обновить коды в файле из БД")
-            menu.add_row("5)", "Назад")
+            menu.add_row("1)", "显示文件中的代码")
+            menu.add_row("2)", "显示数据库中的代码")
+            menu.add_row("3)", "将代码添加到文件中")
+            menu.add_row("4)", "从数据库更新文件中的代码")
+            menu.add_row("5)", "返回")
             
             console.print(menu)
             
             choice = input("\n> ")
             
             if choice == "1":
-                # Показать коды из файла
-                console.print("\n[bold]Реферальные коды из файла:[/]")
+                # 显示文件中的代码
+                console.print("\n[bold]推荐码从文件中:[/]")
                 
                 if file_codes:
                     for i, code in enumerate(file_codes, 1):
                         console.print(f" {i}. {code}")
                 else:
-                    console.print("[yellow]Файл с реферальными кодами пуст[/]")
+                    console.print("[yellow]推荐码文件为空[/]")
                 
-                input("\nНажмите Enter для продолжения...")
+                input("\n按 Enter 继续...")
                 
             elif choice == "2":
-                # Показать коды из БД
-                console.print("\n[bold]Реферальные коды из БД:[/]")
+                # 显示数据库中的代码
+                console.print("\n[bold]推荐码从数据库中:[/]")
                 
                 if db_codes:
                     for i, code in enumerate(db_codes, 1):
                         console.print(f" {i}. {code}")
                 else:
-                    console.print("[yellow]В базе данных нет реферальных кодов[/]")
+                    console.print("[yellow]数据库中没有推荐码[/]")
                 
-                input("\nНажмите Enter для продолжения...")
+                input("\n按 Enter 继续...")
                 
             elif choice == "3":
-                # Добавить код в файл
-                console.print("\n[bold]Добавление кода в файл:[/]")
+                # 将代码添加到文件中
+                console.print("\n[bold]将代码添加到文件中:[/]")
                 
-                new_code = input("Введите реферальный код: ").strip()
+                new_code = input("输入推荐码: ").strip()
                 
                 if new_code:
                     success = await add_ref_code_to_file(new_code)
                     if success:
-                        console.print(f"[green]Код {new_code} успешно добавлен в файл[/]")
+                        console.print(f"[green]代码 {new_code} 已成功添加到文件中[/]")
                     else:
-                        console.print(f"[red]Ошибка при добавлении кода {new_code} в файл[/]")
+                        console.print(f"[red]添加代码 {new_code} 到文件时出错[/]")
                 else:
-                    console.print("[yellow]Код не может быть пустым[/]")
+                    console.print("[yellow]代码不能为空[/]")
                 
-                input("\nНажмите Enter для продолжения...")
+                input("\n按 Enter 继续...")
                 
             elif choice == "4":
-                # Обновить коды в файле из БД
-                console.print("\n[bold]Обновление кодов в файле из БД:[/]")
+                # 从数据库更新文件中的代码
+                console.print("\n[bold]从数据库更新文件中的代码:[/]")
                 
                 if not db_codes:
-                    console.print("[yellow]В базе данных нет реферальных кодов[/]")
-                    input("\nНажмите Enter для продолжения...")
+                    console.print("[yellow]数据库中没有推荐码[/]")
+                    input("\n按 Enter 继续...")
                     continue
                 
-                confirm = input("Это действие перезапишет все коды в файле. Продолжить? (y/n): ").strip().lower()
+                confirm = input("此操作将覆盖文件中的所有代码。继续吗？ (y/n): ").strip().lower()
                 
                 if confirm == 'y':
                     success = await update_ref_codes_file_from_db()
                     if success:
-                        console.print(f"[green]Файл обновлен, добавлено {len(db_codes)} кодов[/]")
+                        console.print(f"[green]文件已更新，添加了 {len(db_codes)} 个代码[/]")
                     else:
-                        console.print("[red]Ошибка при обновлении файла с кодами[/]")
+                        console.print("[red]更新文件中的代码时出错[/]")
                 
-                input("\nНажмите Enter для продолжения...")
+                input("\n按 Enter 继续...")
                 
             elif choice == "5":
-                # Назад
+                # 返回
                 return
                 
             else:
-                console.print("\n[bold yellow]Неверный выбор. Пожалуйста, выберите действие от 1 до 5.[/]")
-                input("Нажмите Enter для продолжения...")
+                console.print("\n[bold yellow]无效选择。请选择 1-5 之间的操作。[/]")
+                input("按 Enter 继续...")
                 
     except Exception as e:
-        logger.error(f"Ошибка при управлении реферальными кодами: {str(e)}")
-        console.print(f"\n[bold red]Ошибка при управлении реферальными кодами: {str(e)}[/]")
-        input("Нажмите Enter для продолжения...")
+        logger.error(f"管理推荐码时出错: {str(e)}")
+        console.print(f"\n[bold red]管理推荐码时出错: {str(e)}[/]")
+        input("按 Enter 继续...")
 
 def print_menu():
-    """Выводит меню программы"""
+    """显示程序菜单"""
     menu = Table(show_header=False, box=None)
-    menu.add_column("Option", style="cyan")
-    menu.add_column("Description", style="white")
+    menu.add_column("选项", style="cyan")
+    menu.add_column("描述", style="white")
     
-    menu.add_row("1)", "Импорт кошельков в базу данных")
-    menu.add_row("2)", "Выполнить все задания")
-    menu.add_row("3)", "Выполнить выбранные задания")
-    menu.add_row("4)", "Показать статистику")
-    menu.add_row("5)", "Управление ресурсами")  # Новый пункт меню
-    menu.add_row("6)", "Управление реферальными кодами")  # Новый пункт меню
-    menu.add_row("7)", "Настройки")
-    menu.add_row("8)", "Выход")
+    menu.add_row("1)", "将钱包导入数据库")
+    menu.add_row("2)", "完成所有钱包任务")
+    menu.add_row("3)", "完成选定任务")
+    menu.add_row("4)", "显示统计")
+    menu.add_row("5)", "资源管理")  # 新菜单项
+    menu.add_row("6)", "管理推荐码")  # 新菜单项
+    menu.add_row("7)", "设置")
+    menu.add_row("8)", "退出")
     
     console.print(menu)
 
 async def main():
-    """Основная функция программы"""
-    # Инициализация файлов и базы данных
+    """主程序函数"""
+    # 初始化文件和数据库
     create_files()
     from utils.db_api_async.db_init import init_db
     # await init_db()
@@ -501,18 +500,18 @@ async def main():
     
     await init_db()
     
-    # Если есть директория миграций, проверяем, что все обновления прошли успешно
+    # 如果存在迁移目录，检查所有更新是否成功
     if has_migrations:
         from utils.db_api_async.db_migrator import check_and_migrate_db
         migration_success = await check_and_migrate_db()
         
         # if not migration_success:
-        #     console.print("\n[bold yellow]Предупреждение: Обновление структуры базы данных может быть неполным.[/]")
-        #     console.print("[bold yellow]Если программа будет работать нестабильно, попробуйте создать новую базу данных.[/]")
-        #     input("Нажмите Enter для продолжения...")
+        #     console.print("\n[bold yellow]警告: 数据库结构更新可能不完整。[/]")
+        #     console.print("[bold yellow]如果程序运行不稳定，请尝试创建新的数据库。[/]")
+        #     input("按 Enter 继续...")
     
     while True:
-        os.system('cls' if os.name == 'nt' else 'clear')  # Очищаем консоль
+        os.system('cls' if os.name == 'nt' else 'clear')  # 清除控制台
         print_logo()
         print_menu()
         
@@ -520,71 +519,71 @@ async def main():
             action = input("\n> ")
             
             if action == "1":
-                # Импорт кошельков
-                console.print("\n[bold cyan]Импорт кошельков в базу данных...[/]")
+                # 将钱包导入数据库
+                console.print("\n[bold cyan]将钱包导入数据库...[/]")
                 await add_wallets_db()
-                console.print("[bold green]Импорт завершен. Нажмите Enter для продолжения...[/]")
+                console.print("[bold green]导入完成。按 Enter 继续...[/]")
                 input()
                 
             elif action == "2":
-                # Выполнить все задания
-                console.print("\n[bold cyan]Выполнение всех заданий...[/]")
+                # 完成所有任务
+                console.print("\n[bold cyan]完成所有任务...[/]")
                 await complete_all_wallets_quests()
-                console.print("[bold green]Выполнение заданий завершено. Нажмите Enter для продолжения...[/]")
+                console.print("[bold green]完成任务完成。按 Enter 继续...[/]")
                 input()
                 
             elif action == "3":
-                # Выполнить выбранные задания
-                console.print("\n[bold cyan]Выполнение выбранных заданий...[/]")
+                # 完成选定任务
+                console.print("\n[bold cyan]完成选定任务...[/]")
                 await complete_specific_quests()
-                console.print("[bold green]Выполнение заданий завершено. Нажмите Enter для продолжения...[/]")
+                console.print("[bold green]完成任务完成。按 Enter 继续...[/]")
                 input()
                 
             elif action == "4":
-                # Показать статистику
-                console.print("\n[bold cyan]Получение статистики...[/]")
+                # 显示统计
+                console.print("\n[bold cyan]获取统计...[/]")
                 await get_wallets_stats()
-                console.print("[bold green]Нажмите Enter для продолжения...[/]")
+                console.print("[bold green]按 Enter 继续...[/]")
                 input()
                 
             elif action == "5":
-                # Управление ресурсами (новая опция)
+                # 资源管理（新选项）
                 await option_manage_resources()
 
             elif action == "6":
-                # Управление реферальными кодами (новая опция)
+                # 管理推荐码（新选项）
                 await option_manage_refcodes()
                 
             elif action == "7":
-                # Настройки
+                # 设置
                 await option_update_settings()
                 sys.exit(0)
                 
             elif action == "8":
-                # Выход
-                console.print("\n[bold cyan]Выход из программы[/]")
+                # 退出
+                console.print("\n[bold cyan]退出程序[/]")
                 sys.exit(0)
             else:
-                console.print("\n[bold yellow]Неверный выбор. Пожалуйста, выберите действие от 1 до 7.[/]")
-                input("Нажмите Enter для продолжения...")
+                console.print("\n[bold yellow]无效选择。请选择 1-8 之间的操作。[/]")
+                input("按 Enter 继续...")
                 
         except KeyboardInterrupt:
-            console.print("\n[bold cyan]Выход из программы.[/]")
+            console.print("\n[bold cyan]退出程序。[/]")
             sys.exit(0)
         except ValueError as err:
-            logger.error(f'Ошибка ввода данных: {err}')
-            console.print(f"\n[bold red]Ошибка ввода данных: {err}[/]")
-            input("Нажмите Enter для продолжения...")
+            logger.error(f'输入数据错误: {err}')
+            console.print(f"\n[bold red]输入数据错误: {err}[/]")
+            input("按 Enter 继续...")
         except Exception as e:
-            logger.error(f'Неожиданная ошибка: {e}')
-            console.print(f"\n[bold red]Неожиданная ошибка: {e}[/]")
-            input("Нажмите Enter для продолжения...")
+            logger.error(f'意外错误: {e}')
+            console.print(f"\n[bold red]意外错误: {e}[/]")
+            input("按 Enter 继续...")
 
 if __name__ == "__main__":
     try:
-        # # Настраиваем логи
-        # logger.remove()  # Удаляем стандартный обработчик
-        # # Добавляем только необходимые уровни логирования
+        # # 设置日志
+        # logger.remove()  # 删除默认处理程序
+        # # 仅添加必要的日志级别
         # logger.add(
         #     "files/errors.log", 
         #     level="ERROR", 
@@ -597,8 +596,8 @@ if __name__ == "__main__":
         #     filter=lambda record: record["level"].name == "INFO" or record["level"].name == "SUCCESS"
         # )
         
-        # Запускаем программу
+        # 运行程序
         asyncio.run(main())
     except KeyboardInterrupt:
-        console.print("\n[bold cyan]Программа завершена![/]")
+        console.print("\n[bold cyan]程序完成![/]")
         sys.exit(0)

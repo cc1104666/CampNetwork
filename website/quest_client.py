@@ -9,9 +9,9 @@ from utils.db_api_async.db_activity import DB
 
 
 class QuestClient(BaseHttpClient):
-    """Клиент для взаимодействия с заданиями CampNetwork"""
+    """CampNetwork 任务交互客户端"""
     
-    # ID заданий, собранные из curl-запросов
+    # 从 curl 请求中收集的任务 ID
     QUEST_IDS = {
         "CampNetwork": "2585eb2f-7cac-45d1-88db-13608762bf17",
         "CampStory": "541ff274-95c5-409a-9ea2-c80ec2719d7e",
@@ -36,35 +36,35 @@ class QuestClient(BaseHttpClient):
         "Hitmakr": "afac07d2-6c0e-42ae-9dd8-1fff68ca6a49",
     }
     
-    # URL для запросов
+    # 请求 URL
     BASE_URL = "https://loyalty.campnetwork.xyz"
     COMPLETE_URL_TEMPLATE = f"{BASE_URL}/api/loyalty/rules/{{quest_id}}/complete"
     STATUS_URL = f"{BASE_URL}/api/loyalty/rules/status"
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.completed_quests = []  # Список выполненных заданий в рамках текущей сессии
-        self.quest_status = {}  # Статус всех заданий
-        self.user_id = kwargs.get('user_id')  # ID пользователя
+        self.completed_quests = []  # 当前会话中已完成的任务列表
+        self.quest_status = {}  # 所有任务的状态
+        self.user_id = kwargs.get('user_id')  # 用户 ID
     
     def set_user_id(self, user_id: str) -> None:
         """
-        Устанавливает ID пользователя
+        设置用户 ID
         
-        Args:
-            user_id: ID пользователя
+        参数:
+            user_id: 用户 ID
         """
         self.user_id = user_id
     
     async def get_status_params(self) -> Dict[str, str]:
         """
-        Получает параметры для запроса статуса заданий
+        获取任务状态请求参数
         
-        Returns:
-            Параметры для запроса статуса
+        返回:
+            状态请求参数
         """
         if not self.user_id:
-            logger.error(f"{self.user} попытка получить параметры статуса без ID пользователя")
+            logger.error(f"{self.user} 尝试获取状态参数但没有用户 ID")
             return {}
             
         return {
@@ -75,10 +75,10 @@ class QuestClient(BaseHttpClient):
     
     async def check_quests_status(self) -> Dict:
         """
-        Проверяет статус всех заданий
+        检查所有任务的状态
         
-        Returns:
-            Статус заданий
+        返回:
+            任务状态
         """
         params = await self.get_status_params()
         if not params:
@@ -92,26 +92,25 @@ class QuestClient(BaseHttpClient):
         
         if success and isinstance(response, dict):
             self.quest_status = response
-            logger.info(f"{self.user} получен статус заданий (всего {len(response.get('rules', []))})")
+            logger.info(f"{self.user} 已获取任务状态（共 {len(response.get('rules', []))} 个）")
             return response
         else:
-            logger.error(f"{self.user} не удалось получить статус заданий: {response}")
+            logger.error(f"{self.user} 无法获取任务状态: {response}")
             return {}
-
 
     async def get_db_completed_quests(self) -> List[str]:
         """
-        Получает список выполненных заданий из базы данных
+        从数据库获取已完成任务列表
         
-        Returns:
-            Список ID выполненных заданий
+        返回:
+            已完成任务的 ID 列表
         """
         try:
             async with Session() as session:
                 db = DB(session=session)
                 completed_quests = await db.get_completed_quests(self.user.id)
                 
-                # Обновляем список выполненных заданий в текущей сессии (названия квестов)
+                # 更新当前会话中已完成的任务列表（任务名称）
                 self.completed_quests = [
                     quest_name for quest_name, quest_id in self.QUEST_IDS.items() 
                     if quest_id in completed_quests
@@ -120,39 +119,39 @@ class QuestClient(BaseHttpClient):
                 return completed_quests
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при получении выполненных заданий из БД: {e}")
+            logger.error(f"{self.user} 从数据库获取已完成任务时出错: {e}")
             return []
 
     async def get_incomplete_quests(self) -> List[str]:
         """
-        Получает список незавершенных заданий, используя данные из БД
+        使用数据库数据获取未完成任务列表
         
-        Returns:
-            Список незавершенных заданий (названий)
+        返回:
+            未完成任务列表（名称）
         """
-        # Получаем выполненные задания из БД
+        # 从数据库获取已完成任务
         completed_quests_ids = await self.get_db_completed_quests()
         
-        # Формируем список незавершенных заданий
+        # 形成未完成任务列表
         incomplete_quests = []
         
         for quest_name, quest_id in self.QUEST_IDS.items():
-            # Проверяем, нет ли ID задания в списке выполненных
+            # 检查任务 ID 是否不在已完成列表中
             if quest_id not in completed_quests_ids:
                 incomplete_quests.append(quest_name)
         
-        logger.info(f"{self.user} незавершенные задания ({len(incomplete_quests)}): {', '.join(incomplete_quests) if incomplete_quests else 'нет'}")
+        logger.info(f"{self.user} 未完成任务 ({len(incomplete_quests)}): {', '.join(incomplete_quests) if incomplete_quests else '无'}")
         return incomplete_quests
 
     async def mark_quest_completed(self, quest_name: str) -> bool:
         """
-        Отмечает задание как выполненное в БД
+        在数据库中标记任务为已完成
         
-        Args:
-            quest_name: Название задания
+        参数:
+            quest_name: 任务名称
             
-        Returns:
-            Статус успеха
+        返回:
+            成功状态
         """
         try:
             async with Session() as session:
@@ -160,7 +159,7 @@ class QuestClient(BaseHttpClient):
                 result = await db.mark_quest_completed(self.user.id, quest_name)
                 
                 if result:
-                    # Добавляем в локальный список выполненных заданий
+                    # 添加到本地已完成任务列表
                     if quest_name not in self.completed_quests:
                         self.completed_quests.append(quest_name)
                         
@@ -169,244 +168,200 @@ class QuestClient(BaseHttpClient):
                     return False
                     
         except Exception as e:
-            logger.error(f"{self.user} ошибка при отметке задания {quest_name} как выполненного: {e}")
+            logger.error(f"{self.user} 标记任务 {quest_name} 为已完成时出错: {e}")
             return False
     
     async def is_quest_completed(self, quest_name: str) -> bool:
         """
-        Проверяет, выполнено ли задание
+        检查任务是否已完成
         
-        Args:
-            quest_name: Название задания
+        参数:
+            quest_name: 任务名称
             
-        Returns:
-            Статус выполнения
+        返回:
+            完成状态
         """
-        # Сначала проверяем в локальном списке выполненных заданий
+        # 首先检查本地已完成任务列表
         if quest_name in self.completed_quests:
             return True
             
-        # Затем проверяем в БД
+        # 然后检查数据库
         try:
             async with Session() as session:
                 db = DB(session=session)
                 return await db.is_quest_completed(self.user.id, quest_name)
                 
         except Exception as e:
-            logger.error(f"{self.user} ошибка при проверке статуса задания {quest_name}: {e}")
+            logger.error(f"{self.user} 检查任务 {quest_name} 状态时出错: {e}")
             return False
 
     async def complete_quest(self, quest_name: str) -> bool:
         """
-        Выполняет задание по его имени и сохраняет результат в БД
+        完成指定任务
         
-        Args:
-            quest_name: Название задания
+        参数:
+            quest_name: 任务名称
             
-        Returns:
-            Статус успеха
+        返回:
+            成功状态
         """
-        # Получаем ID задания
+        # 检查任务是否已完成
+        if await self.is_quest_completed(quest_name):
+            logger.info(f"{self.user} 任务 {quest_name} 已完成")
+            return True
+            
+        # 获取任务 ID
         quest_id = self.QUEST_IDS.get(quest_name)
         if not quest_id:
-            logger.error(f"Задание {quest_name} не найдено в списке")
+            logger.error(f"{self.user} 未知任务: {quest_name}")
             return False
+            
+        # 构建完成 URL
+        complete_url = self.COMPLETE_URL_TEMPLATE.format(quest_id=quest_id)
         
-        # Проверяем, не выполнено ли уже задание
-        try:
-            async with Session() as session:
-                db = DB(session=session)
-                if await db.is_quest_completed(self.user.id, quest_id):
-                    logger.info(f"{self.user} задание {quest_name} (ID: {quest_id}) уже выполнено ранее (из БД)")
-                    return True
-        except Exception as e:
-            logger.error(f"{self.user} ошибка при проверке статуса задания в БД: {e}")
+        # 发送完成请求
+        success, response = await self.request(
+            url=complete_url,
+            method="POST"
+        )
         
-        try:
-            url = self.COMPLETE_URL_TEMPLATE.format(quest_id=quest_id)
-            
-            # Добавляем случайную задержку для имитации человеческого поведения
-            await asyncio.sleep(random.uniform(1.5, 4.0))
-            
-            logger.info(f"{self.user} выполняет задание {quest_name} (ID: {quest_id})")
-            
-            headers = await self.get_headers({
-                'Content-Type': 'application/json',
-                'Origin': 'https://loyalty.campnetwork.xyz',
-                'Priority': 'u=0',
-            })
-            
-            success, response = await self.request(
-                url=url,
-                method="POST",
-                json_data={},  # Пустой JSON как в curl-запросах
-                headers=headers
-            )
-            
-            if success:
-                logger.success(f"{self.user} успешно выполнил задание {quest_name} (ID: {quest_id})")
-                # Отмечаем задание как выполненное в БД
-                try:
-                    async with Session() as session:
-                        db = DB(session=session)
-                        mark_result = await db.mark_quest_completed(self.user.id, quest_id)
-                        
-                        if mark_result:
-                            pass
-                            # logger.debug(f"{self.user} задание {quest_name} (ID: {quest_id}) успешно отмечено в БД")
-                        else:
-                            logger.warning(f"{self.user} не удалось отметить задание {quest_name} (ID: {quest_id}) в БД")
-                except Exception as e:
-                    logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
-                    
+        if success:
+            # 标记任务为已完成
+            if await self.mark_quest_completed(quest_name):
+                logger.success(f"{self.user} 成功完成任务: {quest_name}")
                 return True
             else:
-                # Проверяем, может быть задание уже выполнено
-                if isinstance(response, dict) and response.get("message") == "You have already been rewarded" and response.get("rewarded") is True:
-                    logger.info(f"{self.user} задание {quest_name} (ID: {quest_id}) уже выполнено ранее (ответ сервера)")
-                    # Отмечаем задание как выполненное в БД
-                    try:
-                        async with Session() as session:
-                            db = DB(session=session)
-                            await db.mark_quest_completed(self.user.id, quest_id)
-                    except Exception as e:
-                        logger.error(f"{self.user} ошибка при сохранении статуса задания в БД: {e}")
-                    return True  # Считаем это успешным выполнением
-                else:
-                    logger.error(f"{self.user} ошибка при выполнении задания {quest_name} (ID: {quest_id}): {response}")
-                    return False
-                
-        except Exception as e:
-            logger.error(f"{self.user} исключение при выполнении задания {quest_name} (ID: {quest_id}): {e}")
-            return False   
+                logger.error(f"{self.user} 无法标记任务 {quest_name} 为已完成")
+                return False
+        else:
+            logger.error(f"{self.user} 完成任务 {quest_name} 时出错: {response}")
+            return False
 
     async def complete_all_quests(self, retry_failed: bool = True, max_retries: int = 3) -> Dict[str, bool]:
         """
-        Выполняет все незавершенные задания в случайном порядке
+        完成所有未完成任务
         
-        Args:
-            retry_failed: Повторять ли неудачные задания
-            max_retries: Максимальное количество повторных попыток
+        参数:
+            retry_failed: 是否重试失败的任务
+            max_retries: 最大重试次数
             
-        Returns:
-            Результаты выполнения заданий
+        返回:
+            任务完成结果
         """
-        results = {}
-        
-        # Получаем список незавершенных заданий
+        # 获取未完成任务列表
         incomplete_quests = await self.get_incomplete_quests()
-        
         if not incomplete_quests:
-            logger.success(f"{self.user} все задания уже выполнены")
-            return results
+            logger.info(f"{self.user} 没有未完成的任务")
+            return {}
+            
+        results = {}
+        failed_quests = []
         
-        # Перемешиваем список заданий для случайного порядка выполнения
-        random.shuffle(incomplete_quests)
-        
-        # Словарь для отслеживания попыток
-        retry_counts = {quest: 0 for quest in incomplete_quests}
-        
-        # Выполняем задания
+        # 完成每个任务
         for quest_name in incomplete_quests:
             success = await self.complete_quest(quest_name)
             results[quest_name] = success
             
-            # Увеличенная задержка между заданиями (20-30 секунд)
-            await asyncio.sleep(random.uniform(20.0, 30.0))
-        
-        # Проверяем результаты и повторяем неудачные задания если нужно
-        if retry_failed:
-            # Получаем обновленный список незавершенных заданий
-            remaining = await self.get_incomplete_quests()
+            if not success:
+                failed_quests.append(quest_name)
+                
+        # 如果需要重试失败的任务
+        if retry_failed and failed_quests:
+            logger.info(f"{self.user} 重试失败的任务: {', '.join(failed_quests)}")
             
-            # Повторяем неудачные задания
-            for quest_name in remaining:
-                # Учитываем только задания из первоначального списка
-                if quest_name in retry_counts:
-                    retry_counts[quest_name] += 1
+            for _ in range(max_retries):
+                if not failed_quests:
+                    break
                     
-                    if retry_counts[quest_name] <= max_retries:
-                        logger.warning(f"{self.user} повторная попытка {retry_counts[quest_name]}/{max_retries} для задания {quest_name}")
+                # 复制失败任务列表，因为我们在迭代时会修改它
+                current_failed = failed_quests.copy()
+                failed_quests = []
+                
+                for quest_name in current_failed:
+                    success = await self.complete_quest(quest_name)
+                    results[quest_name] = success
+                    
+                    if not success:
+                        failed_quests.append(quest_name)
                         
-                        # Задержка перед повторной попыткой (30-40 секунд)
-                        await asyncio.sleep(random.uniform(30.0, 40.0))
-                        
-                        success = await self.complete_quest(quest_name)
-                        results[quest_name] = success
-        
-        # Получаем итоговую статистику
-        completed = sum(1 for result in results.values() if result)
-        logger.success(f"{self.user} выполнено {completed} из {len(results)} заданий")
-        
+                if failed_quests:
+                    # 在重试之间等待
+                    await asyncio.sleep(5)
+                    
+        # 记录最终结果
+        if failed_quests:
+            logger.warning(f"{self.user} 以下任务未能完成: {', '.join(failed_quests)}")
+        else:
+            logger.success(f"{self.user} 所有任务已完成")
+            
         return results
-    
+
     async def complete_specific_quests(self, quest_names: List[str]) -> Dict[str, bool]:
         """
-        Выполняет только указанные задания в случайном порядке
+        完成指定的任务列表
         
-        Args:
-            quest_names: Список названий заданий
+        参数:
+            quest_names: 要完成的任务名称列表
             
-        Returns:
-            Результаты выполнения заданий
+        返回:
+            任务完成结果
         """
         results = {}
+        failed_quests = []
         
-        # Проверяем, что все указанные задания существуют
-        invalid_quests = [name for name in quest_names if name not in self.QUEST_IDS]
-        if invalid_quests:
-            logger.warning(f"{self.user} следующие задания не найдены: {', '.join(invalid_quests)}")
-        
-        # Фильтруем только существующие задания
-        valid_quests = [name for name in quest_names if name in self.QUEST_IDS]
-        
-        if not valid_quests:
-            logger.error(f"{self.user} нет действительных заданий для выполнения")
-            return results
-        
-        # Фильтруем задания, которые еще не выполнены
-        not_completed_quests = []
-        for quest_name in valid_quests:
-            if not await self.is_quest_completed(quest_name):
-                not_completed_quests.append(quest_name)
-        
-        if not not_completed_quests:
-            logger.info(f"{self.user} все указанные задания уже выполнены")
-            return results
-        
-        # Перемешиваем список заданий для случайного порядка выполнения
-        random.shuffle(not_completed_quests)
-        
-        # Выполняем задания
-        for quest_name in not_completed_quests:
+        # 完成每个指定的任务
+        for quest_name in quest_names:
+            # 检查任务是否存在
+            if quest_name not in self.QUEST_IDS:
+                logger.error(f"{self.user} 未知任务: {quest_name}")
+                results[quest_name] = False
+                continue
+                
+            # 检查任务是否已完成
+            if await self.is_quest_completed(quest_name):
+                logger.info(f"{self.user} 任务 {quest_name} 已完成")
+                results[quest_name] = True
+                continue
+                
+            # 完成任务
             success = await self.complete_quest(quest_name)
             results[quest_name] = success
             
-            # Увеличенная задержка между заданиями (20-30 секунд)
-            await asyncio.sleep(random.uniform(20.0, 30.0))
-        
+            if not success:
+                failed_quests.append(quest_name)
+                
+        # 记录结果
+        if failed_quests:
+            logger.warning(f"{self.user} 以下任务未能完成: {', '.join(failed_quests)}")
+        else:
+            logger.success(f"{self.user} 所有指定任务已完成")
+            
         return results
     
     async def get_stats(self) -> Dict[str, Any]:
         """
-        Получает статистику выполнения заданий и баллов
+        获取任务完成和积分统计
         
-        Returns:
-            Статистика заданий
+        返回:
+            任务统计信息
         """
-        # Получаем выполненные задания из БД
+        # 获取任务状态
+        status = await self.check_quests_status()
+        if not status:
+            return {"error": "无法获取任务状态"}
+            
+        # 获取已完成任务
         completed_quests = await self.get_db_completed_quests()
-        completed_count = sum(1 for status in completed_quests.values() if status)
         
-        # Пробуем получить статус с сервера для общей статистики
-        try:
-            status = await self.check_quests_status()
-            total_points = status.get('totalPoints', 0) if status else 0
-        except:
-            total_points = 0
+        # 计算统计信息
+        total_quests = len(self.QUEST_IDS)
+        completed_count = len(completed_quests)
+        remaining_count = total_quests - completed_count
         
         return {
-            "completed_count": completed_count,
-            "total_count": len(self.QUEST_IDS),
-            "total_points": total_points
+            "total_quests": total_quests,
+            "completed_quests": completed_count,
+            "remaining_quests": remaining_count,
+            "completion_percentage": (completed_count / total_quests * 100) if total_quests > 0 else 0,
+            "quest_status": status
         }

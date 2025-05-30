@@ -10,20 +10,20 @@ from data.config import CAPMONSTER_API_KEY, ACTUAL_UA
 
 
 class CloudflareHandler:
-    """Обработчик Cloudflare Turnstile защиты"""
+    """Cloudflare Turnstile 保护处理器"""
     
     def __init__(self, http_client):
         """
-        Инициализация обработчика Cloudflare
+        初始化 Cloudflare 处理器
         
         Args:
-            http_client: HTTP-клиент для выполнения запросов
+            http_client: 用于执行请求的 HTTP 客户端
         """
         self.http_client = http_client
     
     async def parse_proxy(self) -> Tuple[Optional[str], Optional[int], Optional[str], Optional[str]]:
         """
-        Парсит строку прокси в составляющие компоненты
+        解析代理字符串为组件
         
         Returns:
             Tuple[ip, port, login, password]
@@ -42,57 +42,57 @@ class CloudflareHandler:
     
     def encode_html_to_base64(self, html_content: str) -> str:
         """
-        Кодирует HTML в base64
+        将 HTML 编码为 base64
         
         Args:
-            html_content: HTML-контент для кодирования
+            html_content: 要编码的 HTML 内容
             
         Returns:
-            HTML, закодированный в base64
+            编码为 base64 的 HTML
         """
-        # Эквивалент encodeURIComponent в JavaScript
+        # JavaScript 中 encodeURIComponent 的等效实现
         encoded = urllib.parse.quote(html_content)
         
-        # Эквивалент unescape в JavaScript (замена %xx последовательностей)
+        # JavaScript 中 unescape 的等效实现（替换 %xx 序列）
         unescaped = urllib.parse.unquote(encoded)
         
-        # Эквивалент btoa в JavaScript
+        # JavaScript 中 btoa 的等效实现
         base64_encoded = base64.b64encode(unescaped.encode('latin1')).decode('ascii')
         
         return base64_encoded
     
     async def get_recaptcha_task(self, html: str) -> Optional[int]:
         """
-        Создает задачу на решение Cloudflare Turnstile в CapMonster
+        在 CapMonster 中创建 Cloudflare Turnstile 解决任务
         
         Args:
-            html: HTML-страница с капчей
+            html: 包含验证码的 HTML 页面
             
         Returns:
-            ID задачи или None в случае ошибки
+            任务 ID 或出错时为 None
         """
         try:
-            # Парсинг прокси
+            # 解析代理
             ip, port, login, password = await self.parse_proxy()
             
-            # Кодируем HTML в base64
+            # 将 HTML 编码为 base64
             html_base64 = self.encode_html_to_base64(html)           
             windows_user_agent = ACTUAL_UA
             
-            # Данные для запроса к CapMonster
+            # CapMonster 请求数据
             json_data = {
                 "clientKey": CAPMONSTER_API_KEY,
                 "task": {
                     "type": "TurnstileTask",
                     "websiteURL": "https://loyalty.campnetwork.xyz/home",
                     "websiteKey": "0x4AAAAAAADnPIDROrmt1Wwj",
-                    "cloudflareTaskType": "cf_clearance",  # Нужен cf_clearance cookie
+                    "cloudflareTaskType": "cf_clearance",  # 需要 cf_clearance cookie
                     "htmlPageBase64": html_base64,
                     "userAgent": windows_user_agent
                 }
             }
             
-            # Добавляем данные прокси, если они есть
+            # 如果有代理数据则添加
             if ip and port:
                 json_data["task"].update({
                     "proxyType": "http",
@@ -106,7 +106,7 @@ class CloudflareHandler:
                         "proxyPassword": password
                     })
                     
-            # Создаем новую сессию
+            # 创建新会话
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     url='https://api.capmonster.cloud/createTask',
@@ -116,35 +116,35 @@ class CloudflareHandler:
                         result = await resp.text()
                         result = json.loads(result)               
                         if result.get('errorId') == 0:
-                            logger.info(f"{self.http_client.user} создана задача в CapMonster: {result['taskId']}")
+                            logger.info(f"{self.http_client.user} 已在 CapMonster 创建任务: {result['taskId']}")
                             return result['taskId']
                         else:
-                            logger.error(f"{self.http_client.user} ошибка CapMonster: {result.get('errorDescription', 'Unknown error')}")
+                            logger.error(f"{self.http_client.user} CapMonster 错误: {result.get('errorDescription', '未知错误')}")
                             return None
                     else:
-                        logger.error(f"{self.http_client.user} ошибка запроса к CapMonster: {resp.status}")
+                        logger.error(f"{self.http_client.user} CapMonster 请求错误: {resp.status}")
                         return None
                         
         except Exception as e:
-            logger.error(f"{self.http_client.user} ошибка при создании задачи в CapMonster: {str(e)}")
+            logger.error(f"{self.http_client.user} 创建 CapMonster 任务时出错: {str(e)}")
             return None
     
     async def get_recaptcha_token(self, task_id: int) -> Optional[str]:
         """
-        Получает результат решения задачи от CapMonster
+        从 CapMonster 获取任务解决结果
         
         Args:
-            task_id: ID задачи
+            task_id: 任务 ID
             
         Returns:
-            Токен cf_clearance или None в случае ошибки
+            cf_clearance 令牌或出错时为 None
         """
         json_data = {
             "clientKey": CAPMONSTER_API_KEY,
             "taskId": task_id
         }
         
-        # Максимальное время ожидания (60 секунд)
+        # 最大等待时间（60秒）
         max_attempts = 60
         
         for i in range(max_attempts):
@@ -158,69 +158,69 @@ class CloudflareHandler:
                             result = await resp.text()
                             result = json.loads(result)                 
                             if result['status'] == 'ready':
-                                # Получаем cf_clearance из решения
+                                # 从解决方案中获取 cf_clearance
                                 if 'solution' in result:
                                     cf_clearance = result['solution'].get('cf_clearance') or result['solution'].get('token')
-                                    logger.success(f"{self.http_client.user} получен cf_clearance токен")
+                                    logger.success(f"{self.http_client.user} 已获取 cf_clearance 令牌")
                                     return cf_clearance
                                     
-                                logger.error(f"{self.http_client.user} решение не содержит cf_clearance")
+                                logger.error(f"{self.http_client.user} 解决方案中不包含 cf_clearance")
                                 return None
                                 
                             elif result['status'] == 'processing':
-                                # Если задача еще решается, ждем 1 секунду
+                                # 如果任务仍在处理中，等待1秒
                                 await asyncio.sleep(1)
                                 continue
                             else:
-                                logger.error(f"{self.http_client.user} неизвестный статус задачи: {result['status']}")
+                                logger.error(f"{self.http_client.user} 未知任务状态: {result['status']}")
                                 return None
                         else:
-                            logger.error(f"{self.http_client.user} ошибка при получении результата: {resp.status}")
+                            logger.error(f"{self.http_client.user} 获取结果时出错: {resp.status}")
                             await asyncio.sleep(2)
                             continue
                             
             except Exception as e:
-                logger.error(f"{self.http_client.user} ошибка при получении результата: {str(e)}")
+                logger.error(f"{self.http_client.user} 获取结果时出错: {str(e)}")
                 return None
                 
-        logger.error(f"{self.http_client.user} превышено время ожидания решения от CapMonster")
+        logger.error(f"{self.http_client.user} 等待 CapMonster 解决方案超时")
         return None
     
     async def recaptcha_handle(self, html: str) -> Optional[str]:
         """
-        Обрабатывает Cloudflare Turnstile captcha через CapMonster
+        通过 CapMonster 处理 Cloudflare Turnstile 验证码
         
         Args:
-            html: HTML-страница с капчей
+            html: 包含验证码的 HTML 页面
             
         Returns:
-            Токен cf_clearance или None в случае ошибки
+            cf_clearance 令牌或出错时为 None
         """
         max_retry = 10
         captcha_token = None
         
         for i in range(max_retry):
             try:
-                # Получаем задание на решение Turnstile
+                # 获取 Turnstile 解决任务
                 task = await self.get_recaptcha_task(html=html)
                 if not task:
-                    logger.error(f"{self.http_client.user} не удалось создать задачу в CapMonster, попытка {i+1}/{max_retry}")
+                    logger.error(f"{self.http_client.user} 无法在 CapMonster 创建任务, 尝试 {i+1}/{max_retry}")
                     await asyncio.sleep(2)
                     continue
                 
-                # Получаем результат решения
+                # 获取解决方案
                 result = await self.get_recaptcha_token(task_id=task)
                 if result:
                     captcha_token = result
-                    logger.success(f"{self.http_client.user} успешно получен токен капчи")
+                    logger.success(f"{self.http_client.user} 成功获取验证码")
                     break
                 else:
-                    logger.warning(f"{self.http_client.user} не удалось получить токен, попытка {i+1}/{max_retry}")
+                    logger.warning(f"{self.http_client.user} 无法获取令牌, 尝试 {i+1}/{max_retry}")
                     await asyncio.sleep(3)
                     continue
                     
             except Exception as e:
-                logger.error(f"{self.http_client.user} ошибка при обработке капчи: {str(e)}")
+                logger.error(f"{self.http_client.user} 验证码处理时出错: {str(e)}")
                 await asyncio.sleep(3)
                 continue
                     
@@ -228,32 +228,29 @@ class CloudflareHandler:
     
     async def handle_cloudflare_protection(self, html: str) -> bool:
         """
-        Обрабатывает защиту Cloudflare
+        处理 Cloudflare 保护
         
         Args:
-            url: URL для запроса
-            method: Метод запроса
+            html: 包含验证码的 HTML 页面
             
         Returns:
-            (bool, cf_clearance): Статус успеха и токен cf_clearance
+            处理成功状态
         """
         try:
-            
-            # Решаем капчу
-            cf_clearance = await self.recaptcha_handle(html=html)
-            
-            if cf_clearance:
-                # Добавляем токен в cookies
-                self.http_client.cookies['cf_clearance'] = cf_clearance
-                
-                # Повторяем запрос с токеном
-                logger.success(f"{self.http_client.user} защита Cloudflare успешно обойдена")
-                return True
-            else:
-                logger.error(f"{self.http_client.user} не удалось получить токен cf_clearance")
+            # 获取验证码令牌
+            captcha_token = await self.recaptcha_handle(html=html)
+            if not captcha_token:
+                logger.error(f"{self.http_client.user} 无法获取验证码令牌")
                 return False
-                    
+            
+            # 设置 cf_clearance cookie
+            self.http_client.cookies.update({
+                'cf_clearance': captcha_token
+            })
+            
+            logger.success(f"{self.http_client.user} 成功处理 Cloudflare 保护")
+            return True
             
         except Exception as e:
-            logger.error(f"{self.http_client.user} ошибка при обработке Cloudflare защиты: {str(e)}")
+            logger.error(f"{self.http_client.user} 处理 Cloudflare 保护时出错: {str(e)}")
             return False

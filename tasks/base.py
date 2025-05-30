@@ -42,29 +42,29 @@ class Base:
         raise ValueError(f'Can not get {token_symbol + second_token} price from Binance')
 
     async def approve_interface(self, token_address, spender, amount: TokenAmount | None = None, infinity: bool = False) -> bool:
-        # Получаем баланс токена
+        # 获取代币余额
         balance = await self.client.wallet.balance(token=token_address)
         
-        # Если баланс 0, сразу возвращаем False
+        # 如果余额为 0，直接返回 False
         if balance.Wei <= 0:
             return False
 
-        # Если не указана сумма, или сумма больше чем баланс, устанавливаем на максимальную
+        # 如果未指定金额，或金额大于余额，则设置为最大值
         if not amount:
             amount = balance
 
-        # Проверяем одобренную сумму для spender
+        # 检查 spender 的已授权金额
         approved = await self.client.transactions.approved_amount(
             token=token_address,
             spender=spender,
             owner=self.client.account.address
         )
 
-        # Если сумма уже одобрена, возвращаем True
+        # 如果金额已授权，返回 True
         if amount.Wei <= approved.Wei:
             return True
 
-        # Если сумма меньше, то делаем approve с "неограниченной" суммой (например, InfinityAmount)
+        # 如果金额较小，则使用"无限"金额进行授权（例如 InfinityAmount）
         if infinity:
             amount = TokenAmount(amount=2*256-1)
 
@@ -74,7 +74,7 @@ class Base:
             amount=amount
         )
 
-        # Ожидаем получения receipt
+        # 等待获取 receipt
         receipt = await tx.wait_for_receipt(client=self.client, timeout=300)
         
         if receipt:

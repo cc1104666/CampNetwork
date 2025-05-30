@@ -7,33 +7,33 @@ from loguru import logger
 
 async def check_and_migrate_db():
     """
-    Проверяет структуру БД и выполняет необходимые миграции
+    检查数据库结构并执行必要的迁移
     """
     try:
-        logger.info("Проверка структуры базы данных...")
+        logger.info("检查数据库结构...")
         
-        # Определяем путь к БД
+        # 确定数据库路径
         db_path = Path('./files/wallets.db')
         
-        # Проверяем, существует ли база данных
+        # 检查数据库是否存在
         if not db_path.exists():
-            logger.info("База данных не существует, создание новой")
-            # Новая БД будет создана с актуальной схемой
+            logger.info("数据库不存在，创建新数据库")
+            # 新数据库将使用最新架构创建
             return True
         
-        # Проверяем наличие директории migrations
+        # 检查 migrations 目录是否存在
         migration_dir = Path('./migrations')
         if not migration_dir.exists():
-            logger.warning("Директория миграций не найдена, пропуск проверки миграций")
+            logger.warning("未找到迁移目录，跳过迁移检查")
             return True
         
-        # Выполняем команду Alembic для проверки статуса миграций
-        logger.info("Запуск миграций Alembic...")
+        # 执行 Alembic 命令检查迁移状态
+        logger.info("运行 Alembic 迁移...")
         try:
-            # Для корректной работы с venv или frozen приложением
+            # 为了在 venv 或冻结应用程序中正常工作
             python_exe = sys.executable
             
-            # Выполняем миграцию через subprocess
+            # 通过 subprocess 执行迁移
             process = subprocess.Popen(
                 [python_exe, "-m", "alembic", "upgrade", "head"],
                 stdout=subprocess.PIPE,
@@ -43,19 +43,19 @@ async def check_and_migrate_db():
             stdout, stderr = process.communicate()
             
             if process.returncode == 0:
-                logger.success("Миграция базы данных успешно выполнена")
+                logger.success("数据库迁移成功完成")
                 if stdout:
-                    logger.info(f"Результат миграции: {stdout}")
+                    logger.info(f"迁移结果: {stdout}")
                 return True
             else:
-                # logger.error(f"Ошибка при выполнении миграции: {stderr}")
+                # logger.error(f"执行迁移时出错: {stderr}")
                 
-                # Если ошибка связана с отсутствием таблицы alembic_version, 
-                # значит это первое обновление из старой БД
+                # 如果错误与 alembic_version 表不存在有关，
+                # 说明这是从旧数据库的第一次更新
                 if "alembic_version" in stderr:
-                    logger.warning("Обнаружена старая структура БД, попытка обновления...")
+                    logger.warning("检测到旧数据库结构，尝试更新...")
                     
-                    # Выполняем команду для первой миграции с пометкой "данные уже созданы"
+                    # 执行第一次迁移命令，标记为"数据已创建"
                     process = subprocess.Popen(
                         [python_exe, "-m", "alembic", "stamp", "head"],
                         stdout=subprocess.PIPE,
@@ -65,36 +65,36 @@ async def check_and_migrate_db():
                     stdout, stderr = process.communicate()
                     
                     if process.returncode == 0:
-                        logger.success("База данных помечена как актуальная")
+                        logger.success("数据库已标记为最新")
                         
-                        # Теперь добавляем недостающее поле ref_code вручную
+                        # 现在手动添加缺失的 ref_code 字段
                         from sqlite3 import connect
                         conn = connect(str(db_path))
                         cursor = conn.cursor()
                         
-                        # Проверяем, есть ли уже поле ref_code
+                        # 检查是否已有 ref_code 字段
                         cursor.execute("PRAGMA table_info(campnetwork)")
                         columns = [col[1] for col in cursor.fetchall()]
                         
                         if "ref_code" not in columns:
-                            logger.info("Добавление поля ref_code в таблицу campnetwork")
+                            logger.info("向 campnetwork 表添加 ref_code 字段")
                             cursor.execute("ALTER TABLE campnetwork ADD COLUMN ref_code TEXT")
                             conn.commit()
-                            logger.success("Поле ref_code успешно добавлено")
+                            logger.success("ref_code 字段添加成功")
                         
                         conn.close()
                         return True
                     else:
-                        # logger.error(f"Ошибка при обновлении структуры БД: {stderr}")
+                        # logger.error(f"更新数据库结构时出错: {stderr}")
                         return False
                 
                 return False
                 
         except Exception as e:
-            # logger.error(f"Ошибка при выполнении миграции: {str(e)}")
+            # logger.error(f"执行迁移时出错: {str(e)}")
             
-            # Если не удалось выполнить миграцию через Alembic, 
-            # пробуем добавить поле вручную
+            # 如果无法通过 Alembic 执行迁移，
+            # 尝试手动添加字段
             return True
         
     except Exception as e:

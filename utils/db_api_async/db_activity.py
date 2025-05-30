@@ -10,7 +10,7 @@ class DB:
         self.session = session
 
     async def add_wallet(self, private_key: str, public_key: str, user_agent: str, proxy: str | None = None, twitter_token: str | None = None):
-        """Добавляет кошелек в базу данных"""
+        """将钱包添加到数据库"""
         wallet = User(
             private_key=private_key,
             public_key=public_key,
@@ -22,89 +22,89 @@ class DB:
         )
         try:
             self.session.add(wallet)
-            await self.session.flush()  # Проверяем наличие ошибок при добавлении
+            await self.session.flush()  # 检查添加时是否有错误
         except Exception as e:
             return False
         return True
 
     async def update_proxy(self, user_id: int, available_proxies: list):
-        """Обновляет прокси для пользователя"""
+        """更新用户的代理"""
         existing_proxies = await self.session.execute(select(User.proxy))
-        existing_proxies = {proxy[0] for proxy in existing_proxies.all()}  # Преобразуем в множество
+        existing_proxies = {proxy[0] for proxy in existing_proxies.all()}  # 转换为集合
 
-        # Фильтруем список, оставляя только уникальные прокси
+        # 过滤列表，只保留唯一的代理
         unique_proxies = list(set(available_proxies) - existing_proxies)
         if not unique_proxies:
-            raise ValueError("Нет доступных уникальных прокси!")
+            raise ValueError("没有可用的唯一代理！")
 
-        # Выбираем случайный уникальный прокси
+        # 随机选择一个唯一代理
         new_proxy = random.choice(unique_proxies)
         new_proxy = parse_proxy(new_proxy)
 
-        # Обновляем прокси для пользователя
+        # 更新用户的代理
         user = await self.session.get(User, user_id)
         if user:
             user.proxy = new_proxy
-            user.proxy_status = "OK"  # Сбрасываем статус при обновлении
+            user.proxy_status = "OK"  # 更新时重置状态
             await self.session.commit()
             return new_proxy
         else:
-            raise ValueError(f"Пользователь с id {user_id} не найден")
+            raise ValueError(f"未找到 ID 为 {user_id} 的用户")
     
     async def update_twitter_token(self, user_id: int, available_tokens: list):
-        """Обновляет токен Twitter для пользователя"""
+        """更新用户的 Twitter 令牌"""
         existing_tokens = await self.session.execute(select(User.twitter_token))
-        existing_tokens = {token[0] for token in existing_tokens.all() if token[0]}  # Преобразуем в множество
+        existing_tokens = {token[0] for token in existing_tokens.all() if token[0]}  # 转换为集合
 
-        # Фильтруем список, оставляя только уникальные токены
+        # 过滤列表，只保留唯一的令牌
         unique_tokens = list(set(available_tokens) - existing_tokens)
         if not unique_tokens:
-            raise ValueError("Нет доступных уникальных токенов Twitter!")
+            raise ValueError("没有可用的唯一 Twitter 令牌！")
 
-        # Выбираем случайный уникальный токен
+        # 随机选择一个唯一令牌
         new_token = random.choice(unique_tokens)
 
-        # Обновляем токен для пользователя
+        # 更新用户的令牌
         user = await self.session.get(User, user_id)
         if user:
             user.twitter_token = new_token
-            user.twitter_status = "OK"  # Сбрасываем статус при обновлении
+            user.twitter_status = "OK"  # 更新时重置状态
             await self.session.commit()
             return new_token
         else:
-            raise ValueError(f"Пользователь с id {user_id} не найден")
+            raise ValueError(f"未找到 ID 为 {user_id} 的用户")
 
     async def get_all_wallets(self) -> list:
-        """Получает все кошельки из базы данных"""
-        result = await self.session.execute(select(User))  # выполняем запрос ко всем записям в таблице
-        wallets = result.scalars().all()  # возвращаем все строки из таблицы как список
+        """从数据库获取所有钱包"""
+        result = await self.session.execute(select(User))  # 执行查询所有记录
+        wallets = result.scalars().all()  # 返回表中的所有行作为列表
         return wallets
 
     async def mark_quest_completed(self, user_id: int, quest_id: str) -> bool:
         """
-        Отмечает задание как выполненное для указанного пользователя
+        将指定用户的任务标记为已完成
         
         Args:
-            user_id: ID пользователя
-            quest_id: ID выполненного задания
+            user_id: 用户 ID
+            quest_id: 已完成任务的 ID
             
         Returns:
-            Статус успеха
+            成功状态
         """
         try:
-            # Получаем пользователя
+            # 获取用户
             user = await self.session.get(User, user_id)
             if not user:
                 return False
             
-            # Получаем текущие выполненные квесты
+            # 获取当前已完成的任务
             completed_quests = user.completed_quests.split(',') if user.completed_quests else []
             
-            # Добавляем задание, если его там нет
+            # 如果任务不在列表中，则添加
             if quest_id not in completed_quests:
                 completed_quests.append(quest_id)
             
-            # Обновляем поле в БД
+            # 更新数据库中的字段
             user.completed_quests = ','.join(completed_quests)
             await self.session.commit()
             
@@ -115,22 +115,22 @@ class DB:
 
     async def is_quest_completed(self, user_id: int, quest_id: str) -> bool:
         """
-        Проверяет, выполнено ли задание указанным пользователем
+        检查指定用户是否已完成任务
         
         Args:
-            user_id: ID пользователя
-            quest_id: ID задания
+            user_id: 用户 ID
+            quest_id: 任务 ID
             
         Returns:
-            Статус выполнения
+            完成状态
         """
         try:
-            # Получаем пользователя
+            # 获取用户
             user = await self.session.get(User, user_id)
             if not user or not user.completed_quests:
                 return False
             
-            # Проверяем, есть ли задание в списке выполненных
+            # 检查任务是否在已完成列表中
             completed_quests = user.completed_quests.split(',')
             return quest_id in completed_quests
             
@@ -139,37 +139,37 @@ class DB:
 
     async def get_completed_quests(self, user_id: int) -> list:
         """
-        Получает список выполненных заданий для указанного пользователя
+        获取指定用户已完成的任务列表
         
         Args:
-            user_id: ID пользователя
+            user_id: 用户 ID
             
         Returns:
-            Список выполненных заданий (ID)
+            已完成任务列表（ID）
         """
         try:
-            # Получаем пользователя
+            # 获取用户
             user = await self.session.get(User, user_id)
             if not user or not user.completed_quests:
                 return []
             
-            # Возвращаем список выполненных заданий
+            # 返回已完成任务列表
             return user.completed_quests.split(',')
             
         except Exception as e:
             return []
             
-    # --- Добавляем новые функции для управления ресурсами ---
+    # --- 添加新的资源管理函数 ---
     
     async def mark_proxy_as_bad(self, user_id: int) -> bool:
         """
-        Отмечает прокси пользователя как плохое
+        将用户的代理标记为不良
         
         Args:
-            user_id: ID пользователя
+            user_id: 用户 ID
             
         Returns:
-            Статус успеха
+            成功状态
         """
         try:
             user = await self.session.get(User, user_id)
@@ -184,13 +184,13 @@ class DB:
     
     async def mark_twitter_as_bad(self, user_id: int) -> bool:
         """
-        Отмечает токен Twitter пользователя как плохой
+        将用户的 Twitter 令牌标记为不良
         
         Args:
-            user_id: ID пользователя
+            user_id: 用户 ID
             
         Returns:
-            Статус успеха
+            成功状态
         """
         try:
             user = await self.session.get(User, user_id)

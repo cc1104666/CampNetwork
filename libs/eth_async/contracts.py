@@ -109,7 +109,7 @@ class Contracts:
         """
         contract_address, contract_abi = await self.get_contract_attributes(contract_address)
         if not abi and not contract_abi:
-            # todo: в дальнейшем сделаем автоматическую загрузку abi из експлорера (в том числе через proxy_address)
+            # todo: 后续我们将实现从浏览器自动加载 abi（包括通过 proxy_address）
             raise ValueError('Can not get abi for contract')
 
         if not abi:

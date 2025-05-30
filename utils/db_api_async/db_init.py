@@ -3,12 +3,12 @@ from .models import Base
 from .db_migrator import check_and_migrate_db
 from loguru import logger
 
-# Асинхронная инициализация базы данных
+# 异步初始化数据库
 async def init_db():
     migration_success = await check_and_migrate_db()
     
     async with async_engine.begin() as conn:
-        # Создаем таблицы
+        # 创建表
         await conn.run_sync(Base.metadata.create_all)
 
 
